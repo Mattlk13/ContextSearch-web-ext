@@ -1,22 +1,17 @@
-function getSearchBar() { return document.getElementById('searchBar') }
+var getSearchBar = () => document.getElementById('searchBar');
 
 var userOptions = {};
 var typeTimer = null;
 
-browser.runtime.sendMessage({action: "getUserOptions"}).then((message) => {
-	userOptions = message.userOptions || {};
-	
-	if ( userOptions === {} ) return;
-	
-	if ( userOptions.quickMenuTheme === 'dark' ) 
-		document.querySelector('#dark').rel="stylesheet";
-	
-	document.body.dataset.theme = userOptions.quickMenuTheme;
+browser.runtime.sendMessage({action: "getUserOptions"}).then( message => {
+	userOptions = message.userOptions;
+
+	setTheme();
 	
 	document.querySelector('#toggle_searchalltabs').checked = userOptions.highLight.findBar.searchInAllTabs;
 });
 
-document.addEventListener('DOMContentLoaded', (e) => {
+document.addEventListener('DOMContentLoaded', e => {
 	getSearchBar().oldValue = getSearchBar().value || "";
 });
 
@@ -25,11 +20,12 @@ function buildMarkOptions() {
 		accuracy: document.querySelector('#accuracy').checked ? "exactly" : "partially",
 		caseSensitive: document.querySelector('#caseSensitive').checked,
 		ignorePunctuation: document.querySelector('#ignorePunctuation').checked,
-		separateWordSearch: document.querySelector('#separateWordSearch').checked
+		separateWordSearch: document.querySelector('#separateWordSearch').checked,
+		limit: userOptions.highLight ? userOptions.highLight.findBar.markOptions.limit : 0
 	};
 }
 
-window.addEventListener("message", (e) => {
+window.addEventListener("message", e => {
 
 	if ( !typeTimer ) // do not update value if typing in find bar
 		getSearchBar().value = e.data.searchTerms || getSearchBar().value || "";
@@ -56,24 +52,25 @@ window.addEventListener("message", (e) => {
 		getSearchBar().select();
 	
 	// only focus after marking - prevents focus with opening on pageload option
-	if ( e.data.action === "markDone" )
+	if ( e.data.action === "markDone" ) {
 		getSearchBar().focus();
-	
-	// console.log(e.data);
-
+		document.querySelector("#searchIcon").src = browser.runtime.getURL('icons/search.svg');
+	}
 });
 
-document.getElementById('next').addEventListener('click', (e) => {
+document.getElementById('next').addEventListener('click', e => {
 	browser.runtime.sendMessage({action: "findBarNext", searchTerms: e.target.value});
 });
 
-document.getElementById('previous').addEventListener('click', (e) => {
+document.getElementById('previous').addEventListener('click', e => {
 	browser.runtime.sendMessage({action: "findBarPrevious"});
 });
 
-getSearchBar().addEventListener('change', (e) => {
+getSearchBar().addEventListener('change', e => {
 
 	e.target.oldValue = e.target.value;
+	
+	document.querySelector("#searchIcon").src = browser.runtime.getURL('icons/spinner.svg');
 
 	if ( e.target.value ) {
 		browser.runtime.sendMessage(Object.assign({
@@ -92,32 +89,32 @@ getSearchBar().addEventListener('change', (e) => {
 	}
 });
 
-window.addEventListener('keydown', (e) => {
+window.addEventListener('keydown', e => {
 	
-	if ( e.which === 27 ) {
+	if ( e.key === "Escape" ) {
 		browser.runtime.sendMessage({action: "unmark"});
 		browser.runtime.sendMessage({action: "closeFindBar"});
 		return;
 	}
 	
-	if ( [40].includes(e.which) ) {
+	if ( e.key === "ArrowDown" ) {
 		browser.runtime.sendMessage({action: "findBarNext"});
 		return;
-	} else if ( [38].includes(e.which) ) {
+	} else if ( e.key === "ArrowUp" ) {
 		browser.runtime.sendMessage({action: "findBarPrevious"});
 		return;
 	}
 	
 });
 
-getSearchBar().addEventListener('keypress', (e) => {
+getSearchBar().addEventListener('keypress', e => {
 	
 	if ( !e.target.value ) return;
 	
 	// prevent some closing weirdness
-	if (e.which === 27 ) return;
+	if (e.key === "Escape" ) return;
 	
-	if ( e.which === 13 ) {
+	if ( e.key === "Enter" ) {
 		if ( e.target.value !== e.target.oldValue )
 			getSearchBar().dispatchEvent(new Event('change'));
 		else
@@ -135,12 +132,12 @@ getSearchBar().addEventListener('keypress', (e) => {
 		
 });
 
-document.getElementById('close').addEventListener('click', (e) => {
+document.getElementById('close').addEventListener('click', e => {
 	browser.runtime.sendMessage({action: "closeFindBar"});
 	browser.runtime.sendMessage({action: "unmark"});
 });
 
-document.addEventListener('DOMContentLoaded', (e) => {
+document.addEventListener('DOMContentLoaded', e => {
 	document.getElementById('mark_counter').innerText = browser.i18n.getMessage("FindBarNavMessage", [0, 0]);
 	document.querySelector('#accuracy + LABEL').title = browser.i18n.getMessage('accuracy') || "Accuracy";
 	document.querySelector('#caseSensitive + LABEL').title = browser.i18n.getMessage('casesensitive') || "Case Sensitive";
@@ -149,32 +146,32 @@ document.addEventListener('DOMContentLoaded', (e) => {
 	document.querySelector('#toggle_navbar + LABEL').title = browser.i18n.getMessage('Navbar');
 	document.querySelector('#toggle_marks + LABEL').title = browser.i18n.getMessage('highlight');
 	document.querySelector('#toggle_searchalltabs + LABEL').title = browser.i18n.getMessage('searchalltabs') || "Search all tabs";
-	document.querySelector('#clearSearchBar').title = browser.i18n.getMessage('delete') || "delete";
+	document.querySelector('#clearSearchBarButton').title = browser.i18n.getMessage('delete') || "delete";
 });
 
 document.querySelectorAll('#accuracy,#caseSensitive,#ignorePunctuation,#separateWordSearch').forEach( el => {
-	el.addEventListener('click', (e) => {
+	el.addEventListener('click', e => {
 		getSearchBar().dispatchEvent(new Event('change'));
 	//	browser.runtime.sendMessage({action: "findBarUpdateOptions", markOptions: buildMarkOptions()});	// infinite loop 100% cpu
 	});
 });
 
-document.querySelector('#toggle_marks').addEventListener('change', (e) => {
+document.querySelector('#toggle_marks').addEventListener('change', e => {
 	if ( e.target.checked )
 		getSearchBar().dispatchEvent(new CustomEvent('change', {detail: true})); // detail = true means set findBarSearch = false to skip jump to first match
 	else
 		browser.runtime.sendMessage({action: "unmark", saveTabHighlighting: true});
 });
 
-document.querySelector('#toggle_navbar').addEventListener('change', (e) => {
+document.querySelector('#toggle_navbar').addEventListener('change', e => {
 	browser.runtime.sendMessage({action: "toggleNavBar", state: e.target.checked});
 });
 
-document.querySelector('#toggle_searchalltabs').addEventListener('change', (e) => {
+document.querySelector('#toggle_searchalltabs').addEventListener('change', e => {
 	
 	// update the object before saving - this frame does not update userOptions automatically
-	browser.runtime.sendMessage({action: "getUserOptions"}).then((message) => {
-		userOptions = message.userOptions || {};
+	browser.runtime.sendMessage({action: "getUserOptions"}).then( message => {
+		userOptions = message.userOptions;
 		userOptions.highLight.findBar.searchInAllTabs = e.target.checked;
 		browser.runtime.sendMessage({action: "saveUserOptions", userOptions: userOptions});
 		
@@ -184,43 +181,11 @@ document.querySelector('#toggle_searchalltabs').addEventListener('change', (e) =
 	});
 });
 
-document.getElementById('clearSearchBar').addEventListener('click', (e) => {
+document.getElementById('clearSearchBarButton').addEventListener('click', e => {
 	getSearchBar().value = null;
 	getSearchBar().dispatchEvent(new Event('change'));
 	getSearchBar().focus();
 });
 
-// override F3 opening default search
-document.addEventListener('keydown', (e) => {
-	if ( e.key === "F3" ) {
-		e.preventDefault();
-		browser.runtime.sendMessage({action: "findBarNext"});
-		return false;
-	}
-});
-
-document.getElementById('handle').addEventListener('mousedown', (e) => {
-	if ( e.which !== 1 ) return;
-
-	document.getElementById('handle').moving = true;
-	window.parent.postMessage({action: "handle_dragstart", target: "findBar", e: {clientX: e.screenX, clientY: e.screenY}}, "*");
-});
-
-document.getElementById('handle').addEventListener('dblclick', (e) => {
-	console.log('dblclick');
-	window.parent.postMessage({action: "handle_dock", target: "findBar", e: {clientX: e.screenX, clientY: e.screenY}}, "*");
-});
-
-window.addEventListener('mouseup', (e) => {
-	if ( e.which !== 1 ) return;
-
-	document.getElementById('handle').moving = false;
-	window.parent.postMessage({action: "handle_dragend", target: "findBar", e: {clientX: e.screenX, clientY: e.screenY}}, "*");
-});
-
-window.addEventListener('mousemove', (e) => {
-	if ( e.which !== 1 ) return;
-	
-	if ( !document.getElementById('handle').moving ) return;
-	window.parent.postMessage({action: "handle_dragmove", target: "findBar", e: {clientX: e.screenX, clientY: e.screenY}}, "*");
-});
+//addChildDockingListeners(document.getElementById('handle'), "findBar");
+addChildDockingListeners(document.body, "findBar", "#searchBar");

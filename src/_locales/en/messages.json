@@ -104,7 +104,7 @@
   },
   
   "ColumnsTooltip": {
-    "message": "Maximum number of search engine icons per row"
+    "message": "Maximum number of search engine icons per row (grid view)"
   },
   
   "Items": {
@@ -532,7 +532,7 @@
   },
   
   "TemplateIncludeError": {
-    "message": "Template must include {searchTerms}"
+    "message": "Template should include {searchTerms}"
   },
 
   "TemplateURLError": {
@@ -592,7 +592,7 @@
   },
   
   "ErrorParsing": {
-    "message": "Error parsing %1"
+    "message": "Error parsing %1\nIf you continue to receive this error, it's likely your Content Security Policy settings"
   },
   
   "AddCustomSearch": {
@@ -862,7 +862,7 @@
   },
   
   "SearchBarCloseAterSearchTooltip": {
-    "message": "Close the Toolbar Search menu after performing a search"
+    "message": "Close the menu after performing a search"
   },
   
   "PerformASearchHeader": {
@@ -894,7 +894,7 @@
   },
   
   "SearchActionsOpenFolder": {
-    "message": "Open Folder",
+    "message": "Browse Folder",
 	"description": "SELECT option label for opening quick menu folder"
   },
   
@@ -919,7 +919,7 @@
   },
   
   "ShortcutKey_tooltip": {
-    "message": "Shortcut key to expand the \"Search With...\" menu in the context menu",
+    "message": "Key to expand the \"Search With...\" menu in the context menu",
     "description": "context menu hotkey tooltip"
   },
   
@@ -990,7 +990,12 @@
   },
   
   "RowsTooltip": {
-    "message": "Maximum number of rows to display on opening",
+    "message": "Maximum number of rows to display on opening (grid view)",
+    "description": "Quick menu rows tooltip"
+  },
+  
+  "RowsSingleColumnTooltip": {
+    "message": "Maximum number of rows to display on opening (text view)",
     "description": "Quick menu rows tooltip"
   },
   
@@ -1000,7 +1005,7 @@
   },
   
   "ContextMenuHotKeyTooltip": {
-    "message": "Keyboard shortcut to expand the \"Search With...\" entry in the context menu",
+    "message": "Access key for the ContextSearch submenu",
     "description": "Description for Context Menu shortcut key"
   },
   
@@ -1106,6 +1111,11 @@
     "message": "more",
     "description": ""
   },
+  
+  "less": {
+    "message": "less",
+    "description": ""
+  },
 
   "OCSEDeleteWarning": {
     "message": "Firefox One-Click Search Engines cannot be deleted. Hide to disable",
@@ -1133,12 +1143,12 @@
   },
   
   "LinksTooltip": {
-    "message": "",
+    "message": "Links can be searched as the text displayed or the url they refer to. Hold CTRL to toggle from the default setting",
     "description": ""
   },
   
   "Text": {
-    "message": "text",
+    "message": "List",
     "description": ""
   },
   
@@ -1328,7 +1338,7 @@
   },
   
   "ClickToSet": {
-    "message": "Click to set",
+    "message": "Set",
     "description": ""
   },
   
@@ -1556,11 +1566,337 @@
   "ClearHighlighting": {
     "message": "Clear Highlighting",
     "description": ""
-  } ,
+  },
   
+  "display": {
+    "message": "Display",
+    "description": ""
+  },
+  
+  "grouplayout": {
+    "message": "Group layout",
+    "description": ""
+  },
+  
+  "groupcolor": {
+    "message": "Group color",
+    "description": ""
+  },
+  
+  "grouplimit": {
+    "message": "Group limit",
+    "description": ""
+  },
+
+  "default": {
+    "message": "default",
+    "description": ""
+  },
+
+  "grid": {
+    "message": "Grid",
+    "description": ""
+  },
+
+  "grouplayoutmessage": {
+    "message": "note: top-tier folders only",
+    "description": ""
+  },
+
+  "toggleview": {
+    "message": "",
+    "description": ""
+  },
+
+  "DefaultViewToolTip": {
+    "message": "Set the default display mode for the menu. Each folder view can be set separately using the grid / list tool or by editing the folder in the search engines manager",
+    "description": ""
+  },
+  
+  "grouphidemoretile": {
+    "message": "Hide \"More\" tile",
+    "description": ""
+  },
+  
+  "findinpage": {
+    "message": "Find in page",
+    "description": ""
+  },
+  
+  "SearchCode": {
+    "message": "Search Code",
+    "description": ""
+  },
+  
+  "Layout": {
+    "message": "Layout",
+    "description": ""
+  },
+  
+  "DefaultView": {
+    "message": "Default View",
+    "description": ""
+  },
+  
+  "Saved": {
+    "message": "Saved",
+    "description": ""
+  },
+  
+  "invalidregex": {
+    "message": "Invalid Regex",
+    "description": ""
+  },
+  
+  "AddUsingFirefoxSearchBar": {
+	"message": "Firefox 78+ Users - Add your engine using the Firefox Search bar"
+  },
+  
+  "SyncWithFirefoxSearchHeader": {
+    "message": "Sync With Firefox Search (Basic Mode)"
+  },
+  
+  "SyncWithFirefoxSearch": {
+    "message": "Disable all ContextSearch engines, subfolders, bookmarklets, etc and only display search engines installed to the Firefox Search bar",
+    "description": ""
+  },
+  
+  "FFEngineExists": {
+    "message": "$1 already installed to Firefox Search bar",
+    "description": ""
+  },
+  
+  "ContexMenuShowLastUsed": {
+    "message": "Show Last Used Engine",
+    "description": ""
+  },
+  
+  "ContexMenuShowLastUsedToolTip": {
+    "message": "Show the last-used search engine at the top of the menu",
+    "description": ""
+  },
+  
+  "ToggleTheme": {
+    "message": "Next Theme",
+    "description": ""
+  },
+  
+  "ToggleHotkeys": {
+    "message": "Hotkeys on / off",
+    "description": ""
+  },
+  
+  "ContexMenuShowRecentlyUsed": {
+    "message": "Show Recently Used Engines",
+    "description": ""
+  },
+  
+  "ContexMenuShowRecentlyUsedToolTip": {
+    "message": "Show recently used engines at the top of the menu",
+    "description": ""
+  },
+  
+  "ContexMenuShowRecentlyUsedAsFolder": {
+    "message": "",
+    "description": ""
+  },
+  
+  "ContexMenuShowRecentlyUsedAsFolderTooltip": {
+    "message": "Show as folder",
+    "description": ""
+  },
+  
+  "ContexMenuShowRecentlyUsedLengthTooltip": {
+    "message": "Recent engines to show",
+    "description": ""
+  },
+  
+  "RecentlyUsed": {
+    "message": "Recently Used",
+    "description": ""
+  },
+    
+  "Recent": {
+    "message": "Recent",
+    "description": ""
+  },
+    
+  "ClearSearchList": {
+    "message": "Clear Search Engine List and Sync With Firefox Search Bar",
+    "description": ""
+  },
+  
+  "CannotEditOneClickEngines": {
+    "message": "Firefox engines must be imported before making changes",
+    "description": ""
+  },
+  
+  "hotkeys": {
+    "message": "Hotkeys",
+    "description": ""
+  },
+  
+  "pagetiles": {
+    "message": "Page Tiles",
+    "description": ""
+  },
+  
+  "pagetilesenabledtooltip": {
+    "message": "Enable Page Tiles",
+    "description": ""
+  },
+  
+  "drop": {
+    "message": "Drop",
+    "description": ""
+  },
+  
+  "hotkeystooltip": {
+    "message": "Select text and press a key to search. Hotkeys can be set in the Search Engines tab",
+    "description": ""
+  },
+  
+  "pagetilesdescription": {
+    "message": "Drag and drop text to a full-page tiled menu of search engines ( experimental )",
+    "description": ""
+  },
+  
+  "EnableHotkeysDescription": {
+    "message": "Enable hotkeys anytime except when editing content ( disable to allow hotkeys only when a ContextSearch menu is in focus )",
+    "description": ""
+  },
+
+  "SearchAll": {
+    "message": "« search all »",
+    "description": ""
+  },
+
+  "pagetilesselectpalette": {
+    "message": "Color palette"
+  },
+  
+  "nonePalette": {
+    "message": "None",
+    "description": "none (palettes.js)"
+  },
+  
+  "alphabetPalette": {
+    "message": "Alphabet",
+    "description": "alphabet (palettes.js) - optional"
+  },
+  
+  "bouquetPalette": {
+    "message": "Bouquet",
+    "description": "bouquet (palettes.js) - optional"
+  },
+  
+  "dayglowPalette": {
+    "message": "Dayglow",
+    "description": "dayglow (palettes.js) - optional"
+  },
+  
+  "easterPalette": {
+    "message": "Easter",
+    "description": "easter (palettes.js) - optional"
+  },
+  
+  "lavenderPalette": {
+    "message": "Lavender",
+    "description": "lavender (palettes.js) - optional"
+  },
+  
+  "metalPalette": {
+    "message": "Metal",
+    "description": "metal (palettes.js) - optional"
+  },
+  
+  "nurseryPalette": {
+    "message": "Nursery",
+    "description": "nursery (palettes.js) - optional"
+  },
+  
+  "socialPalette": {
+    "message": "Social",
+    "description": "social (palettes.js) - optional"
+  },
+  
+  "waterPalette": {
+    "message": "Water",
+    "description": "water (palettes.js) - optional"
+  },
+
+  "keyword": {
+    "message": "Omnibox keyword"
+  },
+
+  "FailedToLoad": {
+    "message": "Failed to load search engines :(",
+    "description": "Failed to load search engines (options.js)"
+  },
+  
+  "fetchingRemoteContent": {
+    "message": "Fetching remote content",
+    "description": "Fetching remote content (options.js)"
+  },
+
+  "searchenginesmanager": {
+    "message": "Search Engines Manager",
+    "description": ""
+  },
+
+  "faviconFinder": {
+    "message": "Find favicons by checking the host site ( opens a background tab )",
+    "description": ""
+  },
+
+  "faviconFinderShort": {
+    "message": "Find favicons",
+    "description": ""
+  },
+
+  "uploadfromlocal": {
+    "message": "Use an image from your computer",
+    "description": ""
+  },
+
+  "Shortcuts": {
+    "message": "Shortcuts",
+    "description": "keyboard shortcuts"
+  },
+
+  "ClosePageTilesOnShake": {
+    "message": "Close Page Tiles by shaking the mouse",
+    "description": ""
+  },
+
+  "ShowFolderSearch": {
+    "message": "Show an option to search the entire folder at the top of the menu",
+    "description": ""
+  },
+
+  "Omnibox": {
+    "message": "Omnibox",
+    "description": ""
+  },
+
+  "OpenOnDragTooltip": {
+    "message": "Drag text / links / images to open",
+    "description": ""
+  },
+
+  "Drag": {
+    "message": "Drag",
+    "description": ""
+  },
+
+  "HighlightLimitTooltip": {
+    "message": "Limit the number of matches to highlight. A lower limit can prevent slowdowns when marking. 0 = no limit",
+    "description": ""
+  },
+
   "___________": {
     "message": "",
     "description": ""
-  } 
+  }
 
 }

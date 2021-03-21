@@ -18,6 +18,25 @@ function findNodes(tree, callback) {
 	return results;
 }
 
+function findNode(tree, callback) {
+	
+	function _traverse(node, parent) {
+		
+		if ( callback(node, parent) ) return node;
+		
+		if (node && node.children) {
+			for (let child of node.children) {
+				let found = _traverse(child, node);
+				if ( found ) return found;
+			}
+		}
+		
+		return null;
+	}
+	
+	return _traverse(tree, null);
+}
+
 function setParents(tree) {
 	
 	findNodes( tree, (node, parent) => {
@@ -93,7 +112,7 @@ function repairNodeTree(tree) {
 	
 	nodesToRemove.forEach( node => removeNode(node, node.parent) );
 	
-	if ( browser.search) {
+	if ( browser.search && browser.search.get ) {
 		
 		return browser.search.get().then( ocses => {
 			
@@ -117,3 +136,38 @@ function repairNodeTree(tree) {
 		return Promise.resolve(repaired);
 	}
 }
+
+function getIconFromNode(node) {
+	
+	if ( node.type === "searchEngine" ) {
+		let se = userOptions.searchEngines.find( se => se.id === node.id );
+		if ( !se ) return browser.runtime.getURL('icons/search.svg');
+		return se.icon_base64String || se.icon_url || browser.runtime.getURL('icons/search.svg');
+	} else if ( node.type === "bookmarklet" ) {
+		return node.icon || browser.runtime.getURL('icons/code.svg');
+	} else if ( node.type === "folder" ) {
+		return node.icon || browser.runtime.getURL('icons/folder-icon.svg');
+	} else {
+		return node.icon || null;
+	}
+}
+
+function nodeCut(node) {
+	return node.parent.children.splice(node.parent.children.indexOf(node), 1).shift();
+}
+
+function nodeInsertBefore(node, sibling) {
+	node.parent = sibling.parent;
+	node.parent.children.splice(node.parent.children.indexOf(sibling), 0, node);
+}
+
+function nodeInsertAfter(node, sibling) {
+	node.parent = sibling.parent;
+	node.parent.children.splice(node.parent.children.indexOf(sibling) + 1, 0, node);
+}
+
+function nodeAppendChild(node, parent) {
+	node.parent = parent;
+	node.parent.children.push(node);
+}
+

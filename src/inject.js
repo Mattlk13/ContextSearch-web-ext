@@ -1,3 +1,13 @@
+var userOptions = {};
+
+browser.runtime.sendMessage({action: "getUserOptions"}).then( message => {
+	userOptions = message.userOptions || {};
+});
+
+browser.runtime.onMessage.addListener((message, sender, sendResponse) => {	
+	if ( message.userOptions ) userOptions = message.userOptions;
+});
+
 function getSelectedText(el) {
 	
 	if (el && typeof el.selectionStart !== 'undefined') {
@@ -9,19 +19,32 @@ function getSelectedText(el) {
 
 }
 
+function isTextBox(element) {
+	return ( element.nodeType == 1 && 
+		(
+			element.nodeName == "TEXTAREA" ||
+			(element.nodeName == "INPUT" && /^(?:text|email|number|search|tel|url|password)$/i.test(element.type)) ||
+			element.isContentEditable
+		)
+	);
+}
+
 // update searchTerms when selecting text and quickMenuObject.locked = true
-document.addEventListener("selectionchange", (ev) => {
+document.addEventListener("selectionchange", ev => {
+
 	if ( quickMenuObject ) quickMenuObject.lastSelectTime = Date.now();
 	
-	let searchTerms = window.getSelection().toString()
+	let searchTerms = window.getSelection().toString();
 	
 	browser.runtime.sendMessage({action: "updateSearchTerms", searchTerms: searchTerms});
 	browser.runtime.sendMessage({action: 'updateContextMenu', searchTerms: searchTerms});
 });
 
 // selectionchange handler for input nodes
-for (let el of document.querySelectorAll("input[type='text'], input[type='search'], textarea, [contenteditable='true']")) {
-	el.addEventListener('mouseup', (e) => {
+for (let el of document.querySelectorAll("input, textarea, [contenteditable='true']")) {
+	el.addEventListener('mouseup', e => {
+		if ( !isTextBox(e.target) ) return false;
+		
 		let searchTerms = getSelectedText(e.target)
 		if (searchTerms) {
 			browser.runtime.sendMessage({action: "updateSearchTerms", searchTerms: searchTerms});
@@ -31,15 +54,31 @@ for (let el of document.querySelectorAll("input[type='text'], input[type='search
 }
 
 // Relabel context menu root on mousedown to fire before oncontextmenu
-window.addEventListener('mousedown', (e) => {
+window.addEventListener('mousedown', e => {
 
 	if ( e.which !== 3 ) return false;
 
 	let searchTerms = getSelectedText(e.target) || linkOrImage(e.target, e) || "";
+
+	if ( !searchTerms && userOptions.contextMenuUseInnerText ) {
+		searchTerms = e.target.innerText.trim();
+	}
 	
-	browser.runtime.sendMessage({action: "updateSearchTerms", searchTerms: searchTerms});
 	browser.runtime.sendMessage({action: 'updateContextMenu', searchTerms: searchTerms});
+	browser.runtime.sendMessage({action: "updateSearchTerms", searchTerms: searchTerms});
 });
+
+function linkOrImage(el, e) {
+	
+	let link = getLink(el, e);
+	let img = getImage(el, e);
+
+	if ( img && userOptions.quickMenuOnImages ) return img;
+	
+	if ( link && userOptions.quickMenuOnLinks ) return link;
+	
+	return false;	
+}
 
 // https://stackoverflow.com/a/1045012
 function offset(elem) {
@@ -56,41 +95,92 @@ function offset(elem) {
     return { left: x, top: y };
 }
 
-function repositionOffscreenElement( element ) {
+function repositionOffscreenElement( element, padding ) {
+
+	padding = padding || { top:0, bottom:0, left:0, right:0 };
+
+	let fixed = window.getComputedStyle( element, null ).getPropertyValue('position') === 'fixed' ? true : false;
 	
+	let originalTransition = element.style.transition || null;
+	// let originalDisplay = element.style.display || null;
+	// element.style.transition = 'none';
+
+//	element.style.display = 'none';
+
+	element.style.maxHeight = element.style.maxWidth = 0;
+
 	// move if offscreen
 	let scrollbarWidth = window.innerWidth - document.documentElement.clientWidth;
 	let scrollbarHeight = window.innerHeight - document.documentElement.clientHeight;
 	
-	let rect = element.getBoundingClientRect();
+	element.style.maxHeight = element.style.maxWidth = null;
+	
+	// element.style.display = originalDisplay;
 
-	if ( rect.bottom > window.innerHeight ) {
+
+	element.style.transition = 'all .15s';
+	
+	let rect = element.getBoundingClientRect();
+	
+	if ( ! fixed ) {
+		
+		let maxWidth = Math.min(window.innerWidth, document.body.getBoundingClientRect().right);
+		let maxHeight = Math.min(window.innerHeight, document.body.getBoundingClientRect().bottom);
+		
+		if (rect.y < 0) 
+			element.style.top = Math.max(parseFloat(element.style.top) - rect.y, 0) + padding.top + "px";
+		
+		if (rect.bottom > window.innerHeight) 
+			element.style.top = parseFloat(element.style.top) - ((rect.y + rect.height) - window.innerHeight) - scrollbarHeight - padding.bottom + "px";
+		
+		if (rect.x < 0) 
+			element.style.left = Math.max(parseFloat(element.style.left) - rect.x, 0) + padding.left + "px";
+		
+		if (rect.right > maxWidth ) 
+			element.style.left = parseFloat(element.style.left) - ((rect.x + rect.width) - maxWidth) - padding.right + "px";
+
+		return;
+	}
+	
+	if ( rect.bottom > window.innerHeight - scrollbarHeight ) {
 		if ( element.style.bottom )
-			element.style.bottom = 0 + "px";
+			element.style.bottom = "0";
 		else 
-			element.style.top = (window.innerHeight - rect.height) + "px";
+			element.style.top = (window.innerHeight - scrollbarHeight - rect.height) + "px";
+		
+		// console.log('bottom overflow');
 	}
 
 	if (rect.top < 0) {
 		if ( element.style.bottom ) 
 			element.style.bottom = (window.innerHeight - rect.height) + "px";
 		else
-			element.style.top = 0 + "px";
+			element.style.top = "0";
+		
+		// console.log('top overflow');
 	}
 	
-	if ( rect.right > window.innerWidth ) {
+	if ( rect.right > window.innerWidth - scrollbarWidth ) {
 		if ( element.style.right )
-			element.style.right = 0 + "px";
+			element.style.right = "0";
 		else 
-			element.style.left = (window.innerWidth - rect.width) + "px";
+			element.style.left = (window.innerWidth - scrollbarWidth - rect.width) + "px";
+		
+		// console.log('right overflow');
 	}
 	
 	if ( rect.left < 0 ) {
 		if ( element.style.right ) 
 			element.style.right = (window.innerWidth - rect.width) + "px";
 		else
-			element.style.left = 0 + "px";
+			element.style.left = "0";
+		
+		// console.log('left overflow');
 	}
+
+	runAtTransitionEnd(element, ["top", "bottom", "left", "right"], () => {
+		element.style.transition = originalTransition;
+	})
 	
 	// if (rect.y + rect.height > window.innerHeight) 
 		// element.style.top = parseFloat(element.style.top) - ((rect.y + rect.height) - window.innerHeight) - scrollbarHeight + "px";
@@ -131,179 +221,13 @@ function getImage(el, e) {
 	return backgroundImage.slice(4, -1).replace(/"/g, "")
 }
 
-function addResizeWidget(el, options) {
-	
-	let o = {
-		tileSize: {},
-		deadzone: 10,
-		onDragStart: function() {},
-		onDrag: function() {},
-		onDrop: function() {},
-		columns: 0,
-		rows: 0,
-		isResizing: false
-	}
-	
-	o = Object.assign(o, options);
-
-	let resizeWidget = el.resizeWidget;
-
-	// overlay a div to capture mouse events over els
-	let overDiv = document.createElement('div');
-	overDiv.className = "CS_overDiv";
-	overDiv.style = "cursor:nwse-resize";
-	
-	// build resize widget once per quick menu open
-	if ( !resizeWidget ) {
-		
-		let startCoords, endCoords, endSize;
-		
-		resizeWidget = document.createElement('div');
-		resizeWidget.className = 'CS_resizeWidget';
-		resizeWidget.title = browser.i18n.getMessage('resize');
-
-		document.body.appendChild(resizeWidget);
-
-		resizeWidget.options = o;
-		resizeWidget.setPosition = positionResizeWidget;
-		el.resizeWidget = resizeWidget;
-
-		resizeWidget.addEventListener('mousedown', function elementResize(e) {
-			
-			o.isResizing = true;
-
-			let startSize = {columns: o.columns, rows: o.rows};
-
-			document.body.appendChild(overDiv);
-
-			el.style.transition = 'none';
-			el.style.borderWidth = '2px';
-			el.style.borderStyle = 'dashed';
-			
-			resizeWidget.style.transition = 'none';
-
-			// lower the quick menu in case zIndex = MAX
-			el.style.zIndex = window.getComputedStyle(el).zIndex - 1;
-
-			// match grid to tile size after scaling
-			let stepX = el.getBoundingClientRect().width / el.offsetWidth * o.tileSize.width;
-			let stepY = el.getBoundingClientRect().height / el.offsetHeight * o.tileSize.height;
-
-			// initialize the coords with some offset for a deadzone
-			startCoords = {x: e.clientX, y: e.clientY};
-
-			document.addEventListener('mousemove', elementDrag);
-			
-			document.addEventListener('click', function captureClick(_e) {
-				_e.stopPropagation();	
-			}, {capture: true, once: true});
-
-			// track mod size to ignore repeat drag events
-			let mostRecentModSize = {columns:0,rows:0};
-			
-			function elementDrag(_e) {
-				endCoords = {x: _e.clientX, y: _e.clientY};
-
-				let colsMod = Math.floor (( endCoords.x - startCoords.x ) / stepX);
-				let rowsMod = Math.floor (( endCoords.y - startCoords.y ) / stepY);
-				
-				// size less than 1 do nothing
-				if ( startSize.columns + colsMod <= 0 || startSize.rows + rowsMod <= 0 ) return;
-
-				// ignore repeat drag events
-				if ( mostRecentModSize.columns === colsMod && mostRecentModSize.rows === rowsMod )
-					return;
-				
-				o.columns = startSize.columns + colsMod;
-				o.rows = startSize.rows + rowsMod;
-
-				o.onDrag({
-					columns: startSize.columns + colsMod,
-					rows: startSize.rows + rowsMod,
-					columnsOffset: colsMod,
-					rowsOffset: rowsMod,
-					xOffset: endCoords.x - startCoords.x,
-					yOffset: endCoords.y - startCoords.y,
-					endCoords: endCoords
-					
-				});
-				
-				mostRecentModSize = {columns: colsMod, rows: rowsMod};
-			}
-
-			document.addEventListener('mouseup', (_e) => {
-
-				_e.preventDefault();
-				_e.stopPropagation();
-				_e.stopImmediatePropagation();
-
-				// clear overlay
-				overDiv.parentNode.removeChild(overDiv);
-				
-				// clear resize styling
-				el.style.transition = null;
-				el.style.borderWidth = null;
-				el.style.borderStyle = null;
-				el.style.zIndex = null;
-				
-				resizeWidget.style.transition = null;
-				
-				o.onDrop(o);
-				
-				document.removeEventListener('mousemove', elementDrag);
-				
-				o.isResizing = false;
-			}, {once: true});
-			
-		});
-	}
-	
-	// queue reposition for transitions
-	el.addEventListener('transitionend', positionResizeWidget);
-	
-	// reposition on custom page zoom event
-	document.addEventListener('zoom', positionResizeWidget);
-	
-	// set animation state
-	if ( !userOptions.enableAnimations ) resizeWidget.style.setProperty('--user-transition', 'none');
-
-	/* dnd resize end */	
-	positionResizeWidget();
-
-	function positionResizeWidget() {
-		
-		resizeWidget.style.top = null;
-		resizeWidget.style.left = null;
-		resizeWidget.style.right = null;
-		resizeWidget.style.bottom = null;
-
-		let w_rect = resizeWidget.getBoundingClientRect();
-		let rect = el.getBoundingClientRect();
-
-		resizeWidget.style.transformOrigin = el.style.transformOrigin || "top left";
-		resizeWidget.style.transform = window.getComputedStyle(el, null).getPropertyValue('transform');
-		
-		let offset = 8 / window.devicePixelRatio;
-
-		if ( el.style.left ) 
-			resizeWidget.style.left = parseFloat(el.style.left) + rect.width - w_rect.width + offset + "px";
-		if ( el.style.right )
-			resizeWidget.style.right = parseFloat(el.style.right) - offset + "px";
-		if ( el.style.top )
-			resizeWidget.style.top = parseFloat(el.style.top) + rect.height - w_rect.height + offset + "px";
-		if ( el.style.bottom )
-			resizeWidget.style.bottom = parseFloat(el.style.bottom) - offset + "px";
-	}
-	
-	return resizeWidget;
-}
-
 function showNotification(msg) {
 	let CS_notification = document.createElement('div');
 	CS_notification.className = 'CS_notification';
 	
 	let img = new Image();
-	img.src = browser.runtime.getURL('icons/alert.png');
+	img.src = browser.runtime.getURL('icons/alert.svg');
+	
 	
 	let content = document.createElement('div');
 	content.className = 'content';
@@ -325,30 +249,44 @@ function showNotification(msg) {
 		CS_notification.style.opacity = 0;
 	}, 3000);
 	
-	CS_notification.onclick = () => {
+	CS_notification.onclick = function() {
 		document.body.removeChild(CS_notification);
 		delete CS_notification;
 	}
 }
 
 // set zoom attribute to be used for scaling objects
-document.documentElement.style.setProperty('--cs-zoom', window.devicePixelRatio);
-
-document.addEventListener('zoom', (e) => {
+function setZoomProperty() {
 	document.documentElement.style.setProperty('--cs-zoom', window.devicePixelRatio);
-});
+}
 
-// apply global user styles for /^[\.|#]CS_/ matches in userStyles
-browser.runtime.sendMessage({action: "getUserOptions"}).then( result => {
-		
-	let userOptions = result.userOptions;
+document.addEventListener('zoom', setZoomProperty);
+setZoomProperty();
 
-	if ( userOptions.userStylesEnabled && userOptions.userStylesGlobal ) {
-		
-		let styleEl = document.createElement('style');
-		
-		styleEl.innerText = userOptions.userStylesGlobal;
+// // apply global user styles for /^[\.|#]CS_/ matches in userStyles
+browser.runtime.sendMessage({action: "addUserStyles", global: true });
 
-		document.head.appendChild(styleEl);
-	}
-});
+// menuless hotkey
+function checkForNodeHotkeys(e) {
+	if ( 
+		!userOptions.allowHotkeysWithoutMenu ||
+		isTextBox(e.target) ||
+		e.shiftKey || e.ctrlKey || e.altKey || e.metaKey ||
+		!getSelectedText(e.target)
+	) return false;
+
+	let node = findNode( userOptions.nodeTree, n => n.hotkey === e.keyCode );
+
+	if ( !node ) return false;
+
+	browser.runtime.sendMessage({
+		action: "quickMenuSearch", 
+		info: {
+			menuItemId: node.id,
+			selectionText: getSelectedText(e.target),
+			openMethod: userOptions.quickMenuSearchHotkeys
+		}
+	});
+}
+
+browser.runtime.sendMessage({action: "injectComplete"});

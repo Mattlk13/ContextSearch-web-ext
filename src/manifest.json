@@ -2,14 +2,14 @@
 	"manifest_version": 2,
 	"name": "ContextSearch web-ext",
 	"description": "__MSG_extensionDescription__",
-	"version": "1.19",
+	"version": "1.29",
 	"homepage_url": "https://github.com/ssborbis/ContextSearch-web-ext",
 	"default_locale": "en",
 	
 	"applications": {
 		"gecko": {
 			"id": "{5dd73bb9-e728-4d1e-990b-c77d8e03670f}",
-			"strict_min_version": "57.0"
+			"strict_min_version": "56.0"
 		}
 	},
 
@@ -22,7 +22,9 @@
 			"lib/encoding.js",
 			"defaultEngines.js",
 			"bookmarks.js",
+			"defaultUserOptions.js",
 			"background.js",
+			"omnibox.js",
 			"searchEngineUtils.js",
 			"mozlz4.js",
 			"keyTable.js",
@@ -41,19 +43,31 @@
 			"js": [
 				"lib/browser-polyfill.min.js",
 				"lib/crossbrowser.js",
-				"lib/mark.es6.min.js",
-				"dock.js",
 				"inject.js",
+				"lib/mark.es6.min.js",
+				"inject_highlight.js",
+				"hotkeys.js",
+				"defaultShortcuts.js",
+				"dragshake.js"
+			],
+			"css": ["inject.css"],
+			"all_frames": true,
+			"match_about_blank": false
+		},
+		{
+			"matches": ["<all_urls>"],
+			"js": [
+				"utils.js",
+				"nodes.js",
 				"opensearch.js",
 				"searchEngineUtils.js",
-				"inject_quickmenu.js",
-				"inject_customSearch.js",
+				"dock.js",
 				"inject_sidebar.js",
-				"inject_highlight.js",
-				"hotkeys.js"
+				"inject_customSearch.js",
+				"resizeWidget.js"
 			],
-			"css": ["inject.css","inject_sidebar.css"],
-			"all_frames": true,
+			"css": ["inject_sidebar.css"],
+			"all_frames": false,
 			"match_about_blank": false
 		}
 	],
@@ -68,11 +82,13 @@
 	],
 	
 	"optional_permissions": [
-		"bookmarks"
+		"bookmarks",
+		"clipboardWrite",
+		"clipboardRead"
 	],
 	
 	"icons": {
-		"48": "icons/icon48-2.png"
+		"48": "icons/icon48.png"
 	},
 	
 	"web_accessible_resources": [
@@ -82,26 +98,32 @@
 		"/findbar.html",
 		"icons/search.svg",
 		"icons/crossmark.svg",
-		"icons/alert.png"
+		"icons/alert.svg",
+		"icons/spinner.svg",
+		"icons/code.svg",
+		"/pagetiles.html"
 	],
 
 	"browser_action": {
 		"default_title": "ContextSearch",
-		"default_icon": "icons/icon48.png"
+		"default_icon": "icons/icon48.png",
+		"default_popup": "searchbar.html"
 	},
 	
 	"sidebar_action": {
 		"default_icon": {
-			"32": "icons/icon48-2.png"
+			"48": "icons/icon48.png"
 		},
 		"default_title": "ContextSearch web-ext",
 		"default_panel": "blank.html",
 		"open_at_install": false
 	},
 	
-	"page_action": {
-		"browser_style": true,
-		"default_icon": "icons/highlight.svg",
-		"default_title": "__MSG_ClearHighlighting__"
+	"commands": {
+		"_execute_browser_action": {}
+	},
+	
+	"omnibox": {
+		"keyword": "cs"
 	}
 }

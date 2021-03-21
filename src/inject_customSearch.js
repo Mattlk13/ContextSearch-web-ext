@@ -1,11 +1,11 @@
 // listen for right-mousedown and enable Add Custom Search menu item if no text is selected
 function inputAddCustomSearchHandler(input) {
 	
-	input.addEventListener('focus', (e) => {
+	input.addEventListener('focus', e => {
 		browser.runtime.sendMessage({action: "enableAddCustomSearchMenu"});
 	});
 	
-	input.addEventListener('mousedown', (ev) => {
+	input.addEventListener('mousedown', ev => {
 
 		if (
 			ev.which !== 3
@@ -22,12 +22,10 @@ function inputAddCustomSearchHandler(input) {
 }
 
 // Add Custom Search listener
-document.querySelectorAll('input,textarea').forEach( input => {
-	inputAddCustomSearchHandler(input);
-});
+document.querySelectorAll('input,textarea').forEach( input => inputAddCustomSearchHandler(input) );
 
 // Add listener for dynamically added inputs
-var CS_observer = new MutationObserver((mutationsList) => {
+var CS_observer = new MutationObserver( mutationsList => {
 	for(var mutation of mutationsList) {
         if (mutation.type == 'childList') {
 			for (let node of mutation.addedNodes) {
@@ -48,7 +46,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 	if (typeof message.action !== 'undefined') {
 		switch (message.action) {
-							
+
 			case "openCustomSearch":
 			
 				if ( !window.document.querySelector("input:focus,textarea:focus") && !message.searchEngine ) {
@@ -72,7 +70,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 				let link = document.querySelector('link[type="application/opensearchdescription+xml"]');
 				let os_href = (link) ? link.href : null;
 
-				window.addEventListener("message", (e) => {	
+				window.addEventListener("message", e => {	
 
 					if (e.origin !== new URL(browser.runtime.getURL('/')).origin) return;	
 					if (e.data.status !== 'complete') return;
@@ -109,8 +107,8 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 								}
 
 								// capture ENTER event in case form executes before 'change' event
-								input.addEventListener('keypress', (e) => {
-									if ( e.keyCode !== 13 ) return;
+								input.addEventListener('keypress', e => {
+									if ( e.key !== "Enter" ) return;
 									if (!input.value) return;
 									
 									// remove the change handler to prevent duplicate test search
@@ -140,9 +138,7 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 				iframe.style.opacity = 0;
 				
 				// remove after transition effect completes
-				setTimeout(() => {
-					document.body.removeChild(iframe);
-				},250);
+				setTimeout(() => iframe.parentNode.removeChild(iframe), 250);
 				
 				break;
 				

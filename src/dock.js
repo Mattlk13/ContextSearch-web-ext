@@ -1,29 +1,3 @@
-function runAtTransitionEnd(el, prop, callback) {
-
-	if ( Array.isArray(prop)) {
-		var remaining = prop.length;
-		prop.forEach( _prop => {
-			runAtTransitionEnd(el, _prop, () => {
-				if ( --remaining === 0 ) callback();
-			});
-		});
-		return;
-	}
-	
-	let oldProp = null;
-	let checkPropInterval = setInterval(() => {
-		let newProp = window.getComputedStyle(el).getPropertyValue(prop);
-		if ( newProp !== oldProp ) {
-			oldProp = newProp;
-			return;
-		}
-
-		clearInterval(checkPropInterval);
-		callback();
-		
-	},25);
-}
-
 function modifyStyleProperty(el, prop, val, name) {
 
 	el.style.setProperty('--cs-'+name+'-'+prop, el.style.getPropertyValue(prop) || "none");
@@ -38,7 +12,8 @@ function offsetElement(el, prop, by, name) {
 	if ( el.style.getPropertyValue('--cs-'+name+'-'+prop) )
 		unOffsetElement(el, prop, name);
 
-	let val = parseFloat(window.getComputedStyle(el, null).getPropertyValue(prop)) + by + "px";	
+	let val = el.getBoundingClientRect()[prop] + by + "px";	
+	// let val = parseFloat(window.getComputedStyle(el, null).getPropertyValue(prop)) + by + "px";	
 	modifyStyleProperty(el, prop, val, name);
 }
 
@@ -95,8 +70,7 @@ function findFixedElements(side, dist) {
 	}
 
 	// filter duplicates using Set
-	let set = new Set(els);
-	els = Array.from(set);
+	els = [...new Set(els)];
 
 	// filter potentials based on display attribute
 	els = els.filter( el => {
@@ -130,6 +104,9 @@ function makeDockable(el, options) {
 		deadzone: 4,
 		onDock: function() {},
 		onUndock: function() {},
+		onMoveStart: function() {},
+		onMove: function() {},
+		onMoveEnd: function() {},
 		windowType: 'docked',
 		dockedPosition: 'top',
 		lastOffsets: {
@@ -140,7 +117,9 @@ function makeDockable(el, options) {
 		},
 		dockedPadding: {},
 		id: el.id,
-		offsetOnScroll: true
+		offsetOnScroll: true,
+		overDiv: null,
+		zoom: 1
 	}
 	
 	let bodyElement = document.documentElement;
@@ -158,6 +137,7 @@ function makeDockable(el, options) {
 		translatePosition: translatePosition,
 		getPositions: getPositions,
 		getOffsets: getOffsets,
+		setDefaultFloatPosition: setDefaultFloatPosition,
 		options: o,
 		moveListener: moveListener,
 		moveStart: moveStart,
@@ -175,17 +155,17 @@ function makeDockable(el, options) {
 		if ( o.windowType === 'docked' ) dock();
 		else undock();
 		
-		// enable animations after a short delay
-		setTimeout(() => {
+		runAtTransitionEnd(el, ["width","height","max-width","max-height","left","right","top","bottom"], () => {
 			el.style.transition = null;
 			el.getBoundingClientRect();
-		}, 250);
-		
+		});
 	}
 	
 	// overlay a div to capture mouse events over iframes
-	let overDiv = document.createElement('div');
-	overDiv.className = "CS_overDiv";
+	o.overDiv = document.createElement('div');
+	o.overDiv.className = "CS_overDiv";
+
+	o.overDiv.onclick = moveEnd;
 
 	// watch for element removal and do cleanup
 	var observer = new MutationObserver(() => {
@@ -194,6 +174,8 @@ function makeDockable(el, options) {
 			observer.disconnect();
 			undoOffset();
 			document.removeEventListener('scroll', scrollHandler);
+			if ( o.overDiv && o.overDiv.parentNode) 
+				o.overDiv.parentNode.removeChild(o.overDiv);
 		}
 	});
 	
@@ -293,7 +275,6 @@ function makeDockable(el, options) {
 
 		// reflow
 		el.getBoundingClientRect();
-
 	}
 	
 	function setDefaultFloatPosition() {
@@ -309,11 +290,13 @@ function makeDockable(el, options) {
 	
 	function dock() {
 		
+		let pos = getPositions(o.lastOffsets);
+		
 		if ( el.dataset.windowtype ) { // skip if init position
 			el.style.transition = 'none';
 				
-			o.lastOffsets = getOffsets();
-			let pos = getPositions(o.lastOffsets);
+		//	o.lastOffsets = getOffsets();
+			
 			translatePosition(o.dockedPosition === 'bottom' ? 'bottom' : 'top', o.dockedPosition === 'right' ? 'right' : 'left');
 			
 			if ( pos.v === 'bottom' )
@@ -331,7 +314,10 @@ function makeDockable(el, options) {
 		
 		doOffset();
 
-		o.onDock(o);
+		runAtTransitionEnd(el, [pos.h, pos.v, "width", "height", "max-width","max-height"], () => {
+			o.onDock(o);
+		});
+		// o.onDock(o);
 	}
 	
 	function undock() {
@@ -372,7 +358,7 @@ function makeDockable(el, options) {
 	}
 	
 	if ( o.handleElement) {
-		o.handleElement.addEventListener('dblclick', (e) => {
+		o.handleElement.addEventListener('dblclick', e => {
 			if ( el.dataset.windowtype === 'docked' ) undock();
 			else dock();	
 		});
@@ -383,10 +369,14 @@ function makeDockable(el, options) {
 	
 	function moveStart(e) {
 
+		// only iframes need zoom adjustment. Why?
+		if ( el.tagName === "IFRAME")
+			browser.runtime.sendMessage({action: "getZoom"}).then(z => o.zoom = z);
+
 		mouseDownStart = Date.now();
 
-		el.X = e.clientX;
-		el.Y = e.clientY;
+		el.X = e.x;
+		el.Y = e.y;
 		el.moving = false;
 		
 		if ( el.tagName !== "IFRAME" ) {
@@ -395,16 +385,19 @@ function makeDockable(el, options) {
 			document.addEventListener('mousemove', moveListener);
 			document.addEventListener('mouseup', moveEnd, {once: true});
 		}
+
+		o.onMoveStart(o);
 	}
 	
 	function moveEnd(e) {
+
 		document.removeEventListener('mousemove', moveListener);
 			
 		if ( !el.moving ) return;
 		
 		el.classList.remove('CS_moving');
 		
-		overDiv.parentNode.removeChild(overDiv);
+		if ( o.overDiv && o.overDiv.parentNode ) o.overDiv.parentNode.removeChild(o.overDiv);
 		
 		o.lastOffsets = getOffsets();
 		let pos = getPositions(o.lastOffsets);
@@ -419,6 +412,7 @@ function makeDockable(el, options) {
 		el.style.transition = null;
 		
 		o.onUndock(o);
+		o.onMoveEnd(o);
 	}
 
 	if ( o.handleElement && o.handleElement.tagName !== "IFRAME" ) {
@@ -431,7 +425,7 @@ function makeDockable(el, options) {
 
 		if ( !el.moving && 
 			(
-				( Math.abs( el.X - e.clientX ) < o.deadzone || Math.abs( el.Y - e.clientY ) < o.deadzone ) 
+				( Math.abs( el.X - e.x ) < o.deadzone || Math.abs( el.Y - e.y ) < o.deadzone ) 
 				&& Date.now() - mouseDownStart < 100
 			))	
 			return;
@@ -441,7 +435,7 @@ function makeDockable(el, options) {
 			// disable transitions during move
 			el.style.transition = "none";
 			
-			document.body.appendChild(overDiv);
+			document.body.appendChild(o.overDiv);
 			el.moving = true;
 			el.classList.add('CS_moving');	
 
@@ -456,23 +450,26 @@ function makeDockable(el, options) {
 		
 		let rect = el.getBoundingClientRect();
 
-		let _top = el.offsetTop - ( el.Y - e.clientY );
+		let _top = el.offsetTop - ( el.Y - e.y ) / o.zoom;
 		if ( _top < 0 ) _top = 0;
 		if ( _top + rect.height > window.innerHeight - getScrollBarHeight() ) _top = window.innerHeight - rect.height;
 
-		el.Y = e.clientY;
-		
-		let _left = el.offsetLeft - ( el.X - e.clientX );
+		let _left = el.offsetLeft - ( el.X - e.x ) / o.zoom;
 		if ( _left < 0 ) _left = 0;
 		if ( _left + rect.width > window.innerWidth - getScrollBarWidth() ) _left = window.innerWidth - rect.width - getScrollBarWidth();
 
-		el.X = e.clientX;
-
 		el.style.top = _top + "px";
 		el.style.left = _left + "px";
+
+		el.X = e.x;
+		el.Y = e.y;
+
+		o.onMove(o);
 	}
 	
 	function getPositions(r) {
+		
+		r = r || el.getBoundingClientRect();
 
 		let l_r = ( r.left > r.right ) ? 'right' : 'left';
 		let t_b = ( r.top > r.bottom ) ? 'bottom' : 'top';
@@ -491,5 +488,101 @@ function makeDockable(el, options) {
 			bottom: (window.innerHeight - r.bottom - getScrollBarHeight()) * window.devicePixelRatio
 		}
 	}
+}
 
+function addChildDockingListeners(handle, target_id, ignoreSelector) {
+
+	let deadzone = 12;
+	let moving = false;
+
+	ignoreSelector = ignoreSelector || null;
+
+	ignoreTarget = e => {
+		let elsToIgnore = [...document.querySelectorAll(ignoreSelector)];
+
+		if ( elsToIgnore.includes(e.target) ) return true;
+		else return false
+	}
+
+	handle.addEventListener('mousedown', e => {	
+
+		if ( ignoreTarget(e) ) return false;
+
+		handle.lastMouseDownCoords = {x: e.screenX, y:e.screenY}
+	});
+
+	window.addEventListener('mouseup', e => {
+		if ( e.which !== 1 ) return;
+
+		if ( !moving ) return;
+
+		moving = false;
+		
+		document.body.classList.remove("noMouse");
+
+		delete handle.lastMouseDownCoords;
+		
+		window.parent.postMessage({action: "handle_dragend", target: target_id, e: {x: e.screenX, y: e.screenY}}, "*");
+	});
+
+	window.addEventListener('mousemove', e => {
+		if ( e.buttons !== 1 ) return;
+
+		if ( !handle.lastMouseDownCoords ) return;
+
+		if ( Math.abs(e.screenX - handle.lastMouseDownCoords.x) < deadzone && Math.abs(e.screenY - handle.lastMouseDownCoords.y) < deadzone ) return;
+
+		if ( !moving ) {
+			document.body.classList.add("noMouse");
+			moving = true;
+			window.parent.postMessage({action: "handle_dragstart", target: target_id, e: {x: e.screenX, y: e.screenY}}, "*");
+			return;
+		}
+
+		window.parent.postMessage({action: "handle_dragmove", target: target_id, e: {x: e.screenX, y: e.screenY}}, "*");
+	});
+
+	handle.addEventListener('dblclick', e => {
+		if ( e.which !== 1 ) return;
+
+		if ( ignoreTarget(e) ) return false;
+
+		window.parent.postMessage({action: "handle_dock", target: target_id, e: {x: e.screenX, y: e.screenY}}, "*");
+	});
+}
+
+function addParentDockingListeners(id, target_id) {
+
+	parentDockingListener = e => {
+
+		if ( e.data.target !== target_id ) return;
+
+		let el = document.getElementById(id);
+
+		if ( !el ) return;
+		
+		let x = e.data.e.x;
+		let y = e.data.e.y;
+
+		switch ( e.data.action ) {
+			case "handle_dragstart":
+				el.docking.moveStart({x:x, y:y});
+				break;
+			
+			case "handle_dragend":
+				el.docking.moveEnd({x:x, y:y});
+				break;
+			
+			case "handle_dragmove":
+				el.docking.moveListener({x:x, y:y});
+				break;
+				
+			case "handle_dock":
+				el.docking.toggleDock();
+				break;
+		}
+	}
+
+	// docking event listeners for iframe
+	window.addEventListener('message', parentDockingListener);
 }

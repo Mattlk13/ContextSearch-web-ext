@@ -13,6 +13,10 @@
 					<div style='display:inline-block;width:225px'>
 						<label class='H2' data-i18n='Name'>Name <span class='CS_info' data-msg='Unique name for this search engine' data-i18n_tooltip='Name' >?</span></label>
 						<input type='text' name='shortname' />
+						<!-- <label class='H2' data-i18n='folder'>Folder <span class='CS_info' data-msg='' data-i18n_tooltip='Name' >?</span></label> -->
+						<div style="display:inline-block;width:calc(100% - 20px);font-size:8pt">
+							<img src="icons/folder-icon.svg" style="height:16px;vertical-align: middle;" /><select name="folder" style="font-size:8pt;padding:2px;width:auto;max-width:200px"></select>
+						</div>
 					</div>
 					<div id='b_simple_add' class='iconButton' style='background-color:#6ec179;position:relative;bottom:8px;' data-i18n='Add'>
 						<img src='/icons/add.svg' /> Add
@@ -131,6 +135,8 @@
 					<option value="MACINTOSH">macintosh</option>
 					<option value="ISO-8859-5">iso-8859-5</option>
 					<option value="ISO-8859-2">iso-8859-2</option>
+					<option value="GBK">gbk</option>
+					<option value="none">no encoding</option>
 					</select>
 				</div>
 				<div style="display:inline;float:right;text-align:right">
@@ -138,16 +144,19 @@
 					<button type="button" class="_hover _hover_small" name="add" data-i18n='Add'>Add</button>
 					<button type="button" class="_hover _hover_small" name="cancel" data-i18n='Cancel'>Cancel</button>
 				</div>
+				<div style="text-align:right">
+					<img src="icons/folder-icon.svg" style="margin-left:20px;height:16px;vertical-align: middle;" /><select name="folder" style="font-size:8pt;padding:2px;width:auto;max-width:200px"></select>
+				</div>
 				<div style='clear:both;background-color:#5bb2fc;width:100%;padding:10px;margin-top:10px'></div>
 			</form>
 			
 			<div id='CS_postSearchEngineInstall' class='CS_menuItem' style='padding-top:0'>
 				<!--<div class='header'>Import New Engine</div>-->
 				<div class='header' style='font-size:11pt;font-weight:normal;text-align:center;background-color:#112738;color:white'>
-					<!--<img src='/icons/import.png' style='height:64px;filter: brightness(0) invert(1);' /><br />-->
+					<!--<img src='/icons/import.svg' style='height:64px;filter: brightness(0) invert(1);' /><br />-->
 					<div style='text-align:left;padding:20px'>
 						<div style='display:inline-block;width:80px;vertical-align:top'>
-							<img src='/icons/alert.svg' style='height:64px;filter: brightness(0) invert(1);' /></div>
+							<img src='/icons/alert.svg' style='fill:none;height:64px;filter: brightness(0) invert(1);' /></div>
 							<div style='display:inline-block;width:250px;font-size:10pt' data-i18n='MustImport'>If an OpenSearch engine was installed you must import it into ContextSearch using the Import file browser. <br /><br />
 							<a name='moreInfo' style='float:right;cursor:pointer'>&#9658; <span data-i18n='MoreInfo'>more info</span></a>
 						</div>
@@ -167,7 +176,7 @@
 				<div class='header' style='font-size:11pt;font-weight:normal;text-align:center;background-color:#112738;color:white'>
 				Success</div>
 				<div style='display:inline-block;width:80px;vertical-align:top'>
-				<img src='/icons/icon48-2.png' style='height:64px;' /></div>
+				<img src='/icons/icon.svg' style='height:64px;' /></div>
 				<p style='font-size:11pt;margin-bottom:8px;padding:10px' data-i18n='NewEngineImported'>Added %1 engine(s) to ContextSearch</p>
 			</div>
 		</div>
@@ -176,6 +185,6 @@
 		<script src='/searchEngineUtils.js'></script>
 		<script src='/customSearch.js'></script>
 		<script src='/opensearch.js'></script>
-		
+		<script src='/nodes.js'></script>
 	</body>
 </html>

@@ -8,11 +8,10 @@ function formToSearchEngine() {
 	return {
 		"searchForm": form.searchform.value, 
 		"description": form.description.value,
-		"query_string":form.template.value,
 		"icon_url":form.iconURL.value,
 		"title":form.shortname.value,
 		"order":userOptions.searchEngines.length, 
-		"icon_base64String": imageToBase64(form.icon, 32), 
+		"icon_base64String": imageToBase64(form.icon, userOptions.cacheIconsMaxSize), 
 		"method": form._method.value, 
 		"params": paramStringToNameValueArray(form.post_params.value), 
 		"template": form.template.value, 
@@ -58,7 +57,6 @@ function showMenu(el) {
 		child.style.maxHeight = '0px';
 	
 	expandElement(el);
-	
 }
 
 function buildOpenSearchAPIUrl() {
@@ -98,8 +96,6 @@ function addSearchEnginePopup(data) {
 	
 	let simple = document.getElementById('simple');
 	
-//	console.log(se);
-	
 	// if page offers an opensearch engine, grab the xml and copy the name into the simple form
 	let ose = null;
 	
@@ -136,8 +132,6 @@ function addSearchEnginePopup(data) {
 		} else 
 			simple.querySelector('input').value = se.title;
 	}
-		
-	
 
 	//setup buttons
 	document.getElementById('a_simple_moreOptions').onclick = function() {
@@ -175,28 +169,53 @@ function addSearchEnginePopup(data) {
 		}
 		
 		document.getElementById('customForm').shortname.value = shortname;
+		let folder = simple.querySelector('[name="folder"]');
 
-		browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: formToSearchEngine()});
+		browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: formToSearchEngine(), folderId: folder.value});
 
 		if ( isFirefox /* firefox */) {
-			// reassign the yes button to add official OpenSearch xml
-			document.getElementById('b_simple_import_yes').onclick = function() {
-
-				// build the GET url for opensearch-api.appspot.com
-				let url = buildOpenSearchAPIUrl();
-
-				// if using OpenSearch engine and name has not changed, use url to OpenSearch.xml
-				if (useOpenSearch && shortname === ose.title)
-					url = openSearchUrl;
+			(async() => {
+				let exists = await browser.runtime.sendMessage({action: "getFirefoxSearchEngineByName", name: shortname});
 				
-				simpleImportHandler(url, true);
-			}
-			showMenu('simple_import');
+				if ( exists ) {
+					closeCustomSearchIframe();
+					return;
+				}
+				
+				// reassign the yes button to add official OpenSearch xml
+				document.getElementById('b_simple_import_yes').onclick = function() {
+
+					// build the GET url for opensearch-api.appspot.com
+					let url = buildOpenSearchAPIUrl();
+
+					// if using OpenSearch engine and name has not changed, use url to OpenSearch.xml
+					if (useOpenSearch && shortname === ose.title)
+						url = openSearchUrl;
+					
+					simpleImportHandler(url, true);
+				}
+				showMenu('simple_import');
+			})();
 		} else {
 			closeCustomSearchIframe();
 		}
 
 	}
+
+
+	let s_folders = document.querySelectorAll('[name="folder"]');
+
+	let folders = findNodes(userOptions.nodeTree, n => n.type === "folder");
+
+	s_folders.forEach( s_folder => {
+		folders.forEach(f => {
+			let o = document.createElement('option');
+			o.value = f.id;
+			o.innerText = f.title;
+
+			s_folder.appendChild(o);
+		});
+	});
 	
 	function simpleImportHandler(url, _confirm) {
 		
@@ -226,9 +245,7 @@ function addSearchEnginePopup(data) {
 					browser.runtime.sendMessage({action: "removeContextSearchEngine", id: userOptions.searchEngines[userOptions.searchEngines.length - 1].id});
 					
 					showMenu('simple_remove');
-					setTimeout(() => {
-						showMenu('customForm');
-					}, 1000);
+					setTimeout(() => showMenu('customForm'), 1000);
 				}
 				
 				showMenu(simple_confirm);
@@ -276,10 +293,11 @@ function addSearchEnginePopup(data) {
 	let template = se.template;
 	
 	if (form._method.value === "GET") {
-		form.template.innerText = se.query_string;
-
+		
 		if (!template) form.template.innerText = browser.i18n.getMessage("TemplateMissingeMessage");
 		
+		form.template.innerText = se.template;
+
 	} else {
 		// POST form.template = form.action
 		form.template.innerText = template;
@@ -291,7 +309,7 @@ function addSearchEnginePopup(data) {
 	let favicon_url = (se.icon_url && !se.icon_url.startsWith("data")) ? se.icon_url : new URL(se.template).origin + "/favicon.ico";
 
 	// Listen for updates to iconURL, replace img.src and disable sending OpenSearch.xml request until loaded
-	form.iconURL.addEventListener('change', (ev) => {
+	form.iconURL.addEventListener('change', ev => {
 		form.icon.src = form.iconURL.value;
 		
 		form.add.disabled = true;
@@ -324,7 +342,7 @@ function addSearchEnginePopup(data) {
 		if (!button.dataset.msg) continue;
 
 		// display button description
-		button.addEventListener('mouseenter', (ev) => {
+		button.addEventListener('mouseenter', ev => {
 			let desc = button.parentNode.querySelector('.CS_optionDescription');
 			desc.style.transition='none';
 			desc.style.opacity=window.getComputedStyle(desc).opacity;
@@ -335,7 +353,7 @@ function addSearchEnginePopup(data) {
 		});
 		
 		// hide button description
-		button.addEventListener('mouseleave', (ev) => {
+		button.addEventListener('mouseleave', ev => {
 			button.parentNode.querySelector('.CS_optionDescription').style.opacity=0;
 		});
 	}
@@ -358,7 +376,7 @@ function addSearchEnginePopup(data) {
 				return;
 			}
 
-			browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: ose}).then((response) => {
+			browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: ose}).then( response => {
 				console.log(response);
 			});
 			
@@ -378,7 +396,7 @@ function addSearchEnginePopup(data) {
 		// Show button
 		div.style.display=null;
 	
-	} 
+	}
 	
 	if (isFirefox) {
 		// Find Plugin listener
@@ -405,7 +423,7 @@ function addSearchEnginePopup(data) {
 	}
 
 	// Form submit
-	form.add.onclick = function(ev) {
+	form.add.onclick = async function(ev) {
 		
 		// Check bad form values
 		if (form.shortname.value.trim() == "") {
@@ -419,8 +437,10 @@ function addSearchEnginePopup(data) {
 			}
 		}
 		if (form.description.value.trim() == "") {
-			alert(browser.i18n.getMessage("DescriptionEmptyError"));
-			return;
+			console.log('no description ... using title');
+			form.description.value = "no description for " + form.shortname.value;
+			//alert(browser.i18n.getMessage("DescriptionEmptyError"));
+			//return;
 		}
 		if (form.description.value.length > 1024 ) {
 			alert(browser.i18n.getMessage("DescriptionSizeError"));
@@ -455,7 +475,7 @@ function addSearchEnginePopup(data) {
 
 		let se = formToSearchEngine();
 
-		browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: se}).then((response) => {
+		browser.runtime.sendMessage({action: "addContextSearchEngine", searchEngine: se, folderId: form.folder.value}).then( response => {
 	//		console.log(response);
 		});
 		
@@ -465,8 +485,14 @@ function addSearchEnginePopup(data) {
 				let url = buildOpenSearchAPIUrl();
 				simpleImportHandler(url, true);
 			}
+
+			let exists = await browser.runtime.sendMessage({action: "getFirefoxSearchEngineByName", name: form.shortname.value});
 			
-			showMenu('simple_import');
+			if ( exists )
+				closeCustomSearchIframe();
+			else	
+				showMenu('simple_import');
+			
 		} else {
 			closeCustomSearchIframe();
 		}
@@ -485,26 +511,21 @@ function addSearchEnginePopup(data) {
 
 function testOpenSearch(form) {
 
-	let params = [];
-
-//	console.log(params);
-	
-	params = paramStringToNameValueArray(form.post_params.value);
+	let params = paramStringToNameValueArray(form.post_params.value);
 
 	let tempSearchEngine = {
 		"searchForm": form.searchform.value, 
-		"query_string":form.template.value,
-		"icon_url": form.iconURL.value,
-		"title": form.shortname.value,
-		"order":"", 
-		"icon_base64String": "", 
+		// "icon_url": form.iconURL.value,
+		// "title": form.shortname.value,
+		// "order":"", 
+		// "icon_base64String": "", 
 		"method": form._method.value, 
 		"params": params, 
 		"template": form.template.value, 
 		"queryCharset": form._encoding.value
 	};
 
-	let searchTerms = window.prompt(browser.i18n.getMessage("EnterSearchTerms"),"firefox");
+	let searchTerms = window.prompt(browser.i18n.getMessage("EnterSearchTerms"),"ContextSearch web-ext");
 	
 	browser.runtime.sendMessage({"action": "testSearchEngine", "tempSearchEngine": tempSearchEngine, "searchTerms": searchTerms});
 	
@@ -515,69 +536,47 @@ function closeCustomSearchIframe() {
 	for (let el of document.getElementsByClassName('CS_menuItem')) {
 		el.style.maxHeight = '0px';
 	}
-	setTimeout(() => {
-		browser.runtime.sendMessage({action: "closeCustomSearch"});
-	},250);
+	setTimeout(() => browser.runtime.sendMessage({action: "closeCustomSearch"}), 250);
 }
 
-function listenForFocusAndPromptToImport() {
+async function listenForFocusAndPromptToImport() {
 
-	browser.runtime.sendMessage({action: "hasBrowserSearch"}).then( result => {
-		
-		if (result) {
-
-			window.addEventListener('focus', () => {
-
-				// look for new one-click engines
-				browser.runtime.sendMessage({action: "checkForOneClickEngines"}).then( newEngineCount => {
-					
-					console.log('found ' + newEngineCount + ' new engines');
-					
-					// do nothing if no engines added
-					if ( !newEngineCount ) return;
-					
-					// show auto notification
-					showMenu('CS_notifyAutomaticUpdated');
-
-					let text = document.querySelector('[data-i18n="NewEngineImported"]');
-					
-					text.innerText = browser.i18n.getMessage("NewEngineImported", newEngineCount);
-						
-					// close iframe after x milliseconds
-					setTimeout(closeCustomSearchIframe, 2000);
-				});
-
-			}, {once: true});
-			
-			return;
-		} else {
-			let dialog = document.getElementById('CS_postSearchEngineInstall');
+	let hasBrowserSearch = await browser.runtime.sendMessage({action: "hasBrowserSearch"});
 	
-			dialog.querySelector('[name="import"]').onclick = function() {
-				browser.runtime.sendMessage({action: "openOptions", hashurl:"#quickload"});
-				closeCustomSearchIframe();	
-			}
+	if (!hasBrowserSearch) {
+		console.error("This feature requires Firefox version 63+");
+		// close iframe after x milliseconds
+		setTimeout(closeCustomSearchIframe, 2000);
+		
+		return;
+	}
+
+	window.addEventListener('focus', async() => {
+
+		// look for new one-click engines
+		let newEngineCount = await browser.runtime.sendMessage({action: "checkForOneClickEngines"});
 			
-			window.addEventListener('focus', () => {
-				
-				dialog.querySelector('[name="moreInfo"]').onclick = function() {
-					browser.runtime.sendMessage({action: "openOptions", hashurl: "?tab=helpTab#help_importing"});
-				}
-				
-				showMenu(dialog);
-				
-				dialog.querySelector('[name="cancel"]').onclick = function() {
-					showMenu('CS_customSearchDialogOptions');
-				}
-				
-			}, {once: true});
-		}
-	});
+		console.log('found ' + newEngineCount + ' new engines');
+		
+		// do nothing if no engines added
+		if ( !newEngineCount ) return;
+		
+		// show auto notification
+		showMenu('CS_notifyAutomaticUpdated');
+
+		let text = document.querySelector('[data-i18n="NewEngineImported"]');
+		
+		text.innerText = browser.i18n.getMessage("NewEngineImported", newEngineCount);
+			
+		// close iframe after x milliseconds
+		setTimeout(closeCustomSearchIframe, 2000);
+
+	}, {once: true});
 
 }
 
 // close iframe when clicking anywhere in the window
-document.addEventListener('click', (e) => {
+document.addEventListener('click', e => {
 	if ( document.body.contains(e.target) ) return false;	
 	closeCustomSearchIframe();
 });
@@ -585,13 +584,13 @@ document.addEventListener('click', (e) => {
 // i18n string replacement and styles
 document.addEventListener('DOMContentLoaded', () => {
 
-		// Build tooltips
+	// Build tooltips
 	let info_msg = document.createElement('div');
 	info_msg.id = "CS_info_msg";
 	document.body.appendChild(info_msg);
 	
 	for (let info of document.getElementsByClassName('CS_info')) {
-		info.addEventListener('mouseenter', (e) => {
+		info.addEventListener('mouseenter', e => {
 			info_msg.innerText = info.dataset.msg;
 			info_msg.style.top = info.getBoundingClientRect().top + window.scrollY + 20 + 'px';
 			info_msg.style.left = info.getBoundingClientRect().left + window.scrollX + 20 + 'px';
@@ -600,11 +599,9 @@ document.addEventListener('DOMContentLoaded', () => {
 			info_msg.style.opacity = 1;
 		});
 		
-		info.addEventListener('mouseleave', (e) => {
+		info.addEventListener('mouseleave', e => {
 			info_msg.style.opacity = 0;
-			setTimeout(() => {
-				info_msg.style.display = 'none';
-			},250);
+			setTimeout(() => info_msg.style.display = 'none', 250);
 		});
 	}
 
@@ -647,7 +644,7 @@ document.addEventListener('DOMContentLoaded', () => {
 	
 });
 
-browser.runtime.sendMessage({action: "getUserOptions"}).then((message) => {
+browser.runtime.sendMessage({action: "getUserOptions"}).then( message => {
 	userOptions = message.userOptions || {};
 });
 
@@ -657,18 +654,17 @@ browser.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 		document.dispatchEvent(new CustomEvent('getUserOptionsEvent', {
 				
-				// if search engines length has changed, true else false
-				detail: ( userOptions.searchEngines.length !== message.userOptions.searchEngines.length )
-			}
-		));
+			// if search engines length has changed, true else false
+			detail: ( userOptions.searchEngines.length !== message.userOptions.searchEngines.length )
+		}));
 		
 		userOptions = message.userOptions || {};
 	}
-	
+
 });
 
 // listen for the custom engine to prompt to add
-window.addEventListener("message", (e) => {
+window.addEventListener("message", e => {
 
 	if (e.data.action && e.data.action === "promptToSearch") {
 		let ok = document.getElementById('b_simple_search_ok');
@@ -685,4 +681,3 @@ window.addEventListener("message", (e) => {
 document.addEventListener('DOMContentLoaded', () => {
 	window.parent.postMessage({status: "complete"}, "*");
 });
-

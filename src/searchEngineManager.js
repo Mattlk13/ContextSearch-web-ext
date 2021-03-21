@@ -34,6 +34,11 @@ function buildSearchEngineContainer() {
 		li.addEventListener('drop',drop_handler);
 		li.addEventListener('dragover',dragover_handler);
 		li.addEventListener('dragleave',dragleave_handler);
+		
+		let header = document.createElement('div');
+		header.className = "header";
+		
+		li.appendChild(header);
 
 		if (node.type === 'searchEngine') {
 			
@@ -46,37 +51,24 @@ function buildSearchEngineContainer() {
 			}
 
 			let icon = document.createElement('img');
-			icon.src = se.icon_base64String || se.icon_url || browser.runtime.getURL('icons/search.svg');
-			li.appendChild(icon);
+			icon.src = getIconFromNode(node);
+			header.appendChild(icon);
 			
 			let text = document.createElement('span');
 			text.className = "label";
 			text.innerText = se.title;
-			li.appendChild(text);
+			header.appendChild(text);
 
-			let edit_form = document.getElementById('editSearchEngineContainer');
-			edit_form.style.maxHeight = null;
-			document.body.appendChild(edit_form);
-			
-			// prevent click events from closing the form
-			edit_form.onclick = function(e) {
-				e.stopPropagation();
-			}
-			
-			li.addEventListener('dblclick', (e) => {
+			li.addEventListener('dblclick', e => {
+
+				let edit_form = document.getElementById('editSearchEngineForm');
+
+				edit_form.node = node;
 
 				e.stopPropagation();
 				
-				if (document.getElementById('editSearchEngineContainer').contains(e.target) ) return false;
-
 				let se = userOptions.searchEngines.find( se => se.id === node.id );
-				
-				// close if open on same TR
-				if (edit_form.parentNode === li && edit_form.style.maxHeight) {
-					edit_form.style.maxHeight = null;
-					return;
-				}
-				
+			
 				function clearError( element ) {
 					if ( 
 						element 
@@ -99,9 +91,24 @@ function buildSearchEngineContainer() {
 					el.classList.add("error");
 				}
 				
+				function templateStringToURLArray(url) {
+					let newString = url.replace(/[;|,|\s]\s*http/g, "____REPLACE____http");
+					let urls = newString.split("____REPLACE____");
+					
+					let URLs = [];
+					urls.forEach( _url => {
+						try {
+							URLS.push( new URL(_url) );
+						} catch ( error ) {}
+					});
+					
+					return URLs;	
+				}
+				
 				// Check bad form values
 				function checkFormValues() {
 	
+					// correct for case
 					[edit_form.template, edit_form.post_params].forEach( el => {
 						el.value = el.value.replace(/{searchterms}/i, "{searchTerms}");
 					});
@@ -119,30 +126,48 @@ function buildSearchEngineContainer() {
 								resolve(false);
 							}
 						}
-						if (edit_form.template.value.indexOf('{searchTerms}') === -1 && edit_form._method.value === 'GET' ) {
-							showError(edit_form.template,browser.i18n.getMessage("TemplateIncludeError"));
-						}
+						
+						// multi-URL to single URL
+						// if ( /[;|,|\s]\s*http/.test(edit_form.template.value) ) {
+							// edit_form.template.value = edit_form.template.value.replace(/[;|,|\s]\s*http/g, "+http");
+							
+							// if ( !/^CS:\/\//.test(edit_form.template.value) )
+								// edit_form.template.value = edit_form.template.value.replace(/^/, "CS://");
+						// }
+						// if (edit_form.template.value.indexOf('{searchTerms}') === -1 && edit_form._method.value === 'GET' && edit_form.searchCode.value.trim() === "") {
+							// showError(edit_form.template,browser.i18n.getMessage("TemplateIncludeError"));
+						// }
 						try {
 							let _url = new URL(edit_form.template.value);
 						} catch (error) {
-							showError(edit_form.template,browser.i18n.getMessage("TemplateURLError"));
+							try {
+								JSON.parse(edit_form.template.value);
+							} catch (error2) {
+								showError(edit_form.template,browser.i18n.getMessage("TemplateURLError"));
+							}
 						}
 						try {
 							let _url = new URL(edit_form.searchform.value);
 						} catch (error) {
-							let _url = new URL(edit_form.template.value);
-							edit_form.searchform.value = _url.origin;
-						//	showError(edit_form.template,browser.i18n.getMessage("TemplateURLError"));
+							try {
+								let _url = new URL(edit_form.template.value);
+								edit_form.searchform.value = _url.origin;
+							} catch (_error) {}
+						}
+							// showError(edit_form.template,browser.i18n.getMessage("TemplateURLError"));
 						//	return;
-						}
 
-						if (edit_form.post_params.value.indexOf('{searchTerms}') === -1 && edit_form._method.value === 'POST' ) {
-							showError(edit_form.post_params, browser.i18n.getMessage("POSTIncludeError"));
-						}
+						// if (edit_form.post_params.value.indexOf('{searchTerms}') === -1 && edit_form._method.value === 'POST' ) {
+							// showError(edit_form.post_params, browser.i18n.getMessage("POSTIncludeError"));
+						// }
 						if (edit_form.searchRegex.value) {
 							try {
-								let parts = JSON.parse('[' + edit_form.searchRegex.value + ']');
-								let rgx = new RegExp(parts[0], 'g');
+								let lines = edit_form.searchRegex.value.split(/\n/);
+								lines.forEach( (line, index) => {
+							
+									let parts = JSON.parse('[' + line.trim() + ']');
+									let rgx = new RegExp(parts[0], parts[2] || 'g');
+								});
 							} catch (error) {
 								showError(edit_form.searchRegex, browser.i18n.getMessage("InvalidRegex") || "Invalid Regex");
 							}
@@ -152,36 +177,8 @@ function buildSearchEngineContainer() {
 							resolve(true);
 						}
 
-						icon.src = browser.runtime.getURL("/icons/spinner.svg");
-						let newIcon = new Image();
-						newIcon.onload = function() {
-							icon.src = imageToBase64(this, 32) || tempImgToBase64(se.title.charAt(0).toUpperCase());
-							resolve(true);
-						}
-						newIcon.onerror = function() {	
-							showError(edit_form.iconURL,browser.i18n.getMessage("IconLoadError"));
-							icon.src = se.icon_base64String || tempImgToBase64(se.title.charAt(0).toUpperCase());
-							resolve(true);
-						}
-						
-						if ( !edit_form.iconURL.value ) {
-							let url = new URL(edit_form.template.value);
-							newIcon.src = (!url.origin || url.origin == 'null' ) ? "" : url.origin + "/favicon.ico";
-						} else if ( /^generate:/.test(edit_form.iconURL.value) ) {
+						resolve(true);
 
-							let url = new URL(edit_form.iconURL.value.replace(/#/g, "%23"));
-	
-							// https://stackoverflow.com/a/8649003
-							let obj = JSON.parse('{"' + url.searchParams.toString().replace(/&/g, '","').replace(/=/g,'":"') + '"}', function(key, value) { return key===""?value:decodeURIComponent(value) });
-
-							newIcon.src = createCustomIcon(obj);
-						
-						} else {
-							newIcon.src = edit_form.iconURL.value;
-						}
-						
-						// set a timeout for loading the image
-						setTimeout(() => { if (!newIcon.complete) newIcon.onerror(); }, 5000);
 					});
 
 				}
@@ -195,43 +192,47 @@ function buildSearchEngineContainer() {
 
 				edit_form.shortName.value = se.title;
 				edit_form.description.value = se.description || "";
-				edit_form.template.value = se.query_string;
+				edit_form.template.value = se.template;
 				edit_form.iconURL.value = se.icon_url || se.icon_base64String;
 				edit_form._method.value = se.method || "GET";
 				edit_form.post_params.value = (se.method === 'GET') ? "" : nameValueArrayToParamString(se.params);
 				edit_form._encoding.value = se.queryCharset || "UTF-8";
 				edit_form.searchform.value = se.searchForm || function() {
 					try {
-						return new URL(se.query_string).origin;
+						return new URL(se.template).origin;
 					} catch (err) {
 						return "";
 					}
 				}();
 				edit_form.searchRegex.value = se.searchRegex || "";
-				
-				edit_form.addEventListener('mouseover', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', false);
-				});
-				
-				edit_form.addEventListener('mouseout', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', true);
-				});
-				
-				edit_form.cancel.onclick = function() {
-					edit_form.style.maxHeight = null;
+				edit_form.searchCode.value = se.searchCode || "";
+								
+				edit_form.close.onclick = edit_form.closeForm;
+
+				edit_form.test.onclick = function() {
+					let searchTerms = window.prompt(browser.i18n.getMessage("EnterSearchTerms"),"ContextSearch web-ext");
+	
+					let tempSearchEngine = {
+						"searchForm": edit_form.searchform.value,
+						"method": edit_form._method.value, 
+						"params": paramStringToNameValueArray(edit_form.post_params.value), 
+						"template": edit_form.template.value, 
+						"queryCharset": edit_form._encoding.value,
+						"searchRegex": edit_form.searchRegex.value,
+						"searchCode": edit_form.searchCode.value
+					};
+
+					browser.runtime.sendMessage({"action": "testSearchEngine", "tempSearchEngine": tempSearchEngine, "searchTerms": searchTerms});
 				}
 				
 				edit_form.copy.onclick = function() {
-					addNewEngine(node, true);
+					let newNode = addNewEngine(node, true);
+					addNode(newNode, li);
+					updateNodeList(true);
+
+					newLi.dispatchEvent(new MouseEvent('dblclick'));
 				}
-				
-				document.getElementById('iconrefresh').onclick = function() {
-					icon.src = browser.runtime.getURL('icons/spinner.gif');
-					icon.src = edit_form.iconURL.value;
-				}
-				
+								
 				edit_form.addOpenSearchEngine.onclick = function() {
 
 					let url = "https://opensearch-api.appspot.com" 
@@ -248,6 +249,7 @@ function buildSearchEngineContainer() {
 						+ "&VERSION=" + encodeURIComponent(browser.runtime.getManifest().version);
 					
 					browser.runtime.sendMessage({action: "addSearchEngine", url:url});
+					
 				}
 				
 				edit_form.save.onclick = function() {
@@ -259,32 +261,57 @@ function buildSearchEngineContainer() {
 						clearError(label.nextSibling)
 					}
 
-					function saveForm(closeForm) {
-						
-						closeForm = ( closeForm === undefined ) ? true : false;
+					async function saveForm() {
+
 						// loading icon is last step. Set values after everything else
 							
-						// alert of problems with changing name
+						// alert problems with changing name
 						if (se.title !== edit_form.shortName.value) {
-
-							if ( !browser.runtime.getBrowserInfo || confirm(browser.i18n.getMessage('NameChangeWarning')) ) {
-
-								se.title = li.node.title = node.title = edit_form.shortName.value;
+							
+							// if firefox, check for ocses and confirm if name exists
+							if ( browser.search && browser.search.get ) {
+								let ocses = await browser.search.get();
+							
+								let ocse = ocses.find( _ocse => _ocse.name == edit_form.shortName.value );
 								
-								// change name on all labels
-								[].forEach.call( table.getElementsByTagName('li'), _li => {
-									if ( _li.node.id === node.id )
-										_li.querySelector('.label').innerText = _li.node.title = se.title;
-
-								});
-
-								updateNodeList();
+								if ( ocse && !confirm(browser.i18n.getMessage('NameChangeWarning')))
+									return;
 							}
+
+							se.title = li.node.title = node.title = edit_form.shortName.value;
+							
+							// change name on all labels
+							[].forEach.call( table.getElementsByTagName('li'), _li => {
+								if ( _li.node.id === node.id )
+									_li.querySelector('.label').innerText = _li.node.title = se.title;
+
+							});
+
+							updateNodeList();
 						}
 
-						se.icon_base64String = icon.src;
+						let iconBase64 = await new Promise( resolve => {
+							let img = new Image();
+							img.onload = () => resolve(imageToBase64(img, userOptions.cacheIconsMaxSize));
+							img.onerror = () => resolve("");
+
+							setTimeout(() => resolve(""), 2500);
+
+							let src = getIconSourceFromURL(edit_form.iconURL.value);
+
+							if ( src.startsWith('data:')) {
+								resolve(src);
+								return;
+							}
+
+							img.src = src;
+						});
+
+						icon.src = iconBase64 || "icons/search.svg";
+
+						se.icon_base64String = iconBase64;  //icon.src;
 						se.description = edit_form.description.value;
-						se.query_string = se.template = edit_form.template.value;
+						se.template = edit_form.template.value;
 						se.searchForm = edit_form.searchform.value;
 						se.icon_url = edit_form.iconURL.value;
 						se.method = edit_form._method.value;
@@ -292,18 +319,20 @@ function buildSearchEngineContainer() {
 						se.params = paramStringToNameValueArray(edit_form.post_params.value);
 						se.id = se.id || gen();
 						se.searchRegex = edit_form.searchRegex.value;
+						se.searchCode = edit_form.searchCode.value;
 						
-						updateNodeList();
+						// force a save even if the nodeTree is unchanged
+						updateNodeList(true);	
 						
-						showSaveMessage(edit_form.querySelector('.error') ? 'saved with errors' : "saved", null, "yes", $("#editFormSaveMessage"));
-
-						// if (closeForm)
-							// edit_form.style.maxHeight = null;
+						if ( edit_form.querySelector('.error') )
+							showSaveMessage('saved with errors', 'red', edit_form.querySelector('.saveMessage'));
+						else
+							showSaveMessage('saved', null, edit_form.querySelector('.saveMessage'));
 					}
 					
 					checkFormValues().then( result => {
 						if ( result ) saveForm();
-						else showSaveMessage("cannot save", "red", "no", $("#editFormSaveMessage"));
+						else showSaveMessage("cannot save", "red", edit_form.querySelector('.saveMessage'));
 					});
 				}
 				
@@ -314,13 +343,11 @@ function buildSearchEngineContainer() {
 					});
 				}
 
-				// attach form to title cell
-				li.appendChild(edit_form);
-				
-				// reflow trick
-				edit_form.getBoundingClientRect();
-				edit_form.style.maxHeight = '400px';
-				
+				createFormContainer(edit_form);
+				addIconPickerListener(edit_form.iconPicker, li);
+
+				edit_form.addFaviconBox(getIconFromNode(node));
+
 				checkFormValues();
 			});
 
@@ -329,85 +356,60 @@ function buildSearchEngineContainer() {
 		if (node.type === 'bookmarklet' || node.type === "bookmark") {
 			
 			let img = document.createElement('img');
-			img.src = node.icon || browser.runtime.getURL('icons/code.svg');
-			li.appendChild(img);
+			img.src = getIconFromNode(node);
+			header.appendChild(img);
 			
-			li.addEventListener('dblclick', (e) => {
-				//console.log('dblclick');
-				editBm();
-			});	
+			li.addEventListener('dblclick', editBm);
 			
 			let text = document.createElement('span');
 			text.innerText = node.title;
 			text.className = "label";
-			li.appendChild(text);
+			header.appendChild(text);
 			
 			function editBm() {
-
-				if ( li.querySelector(".editForm") ) {
-					let _form = li.querySelector(".editForm");
-					_form.closeForm();
-					return;
-				}
+			
+				let _form = $('#editBookmarkletForm');
 				
-				let _form = document.createElement('form');
-				_form.innerHTML = `<label data-i18n="Icon">${browser.i18n.getMessage("icon")}</label><input name="iconURL" type="text" class="inputNice" />
-				<button type="button" name="close" class="inputNice _hover" style="float:right;margin:10px 5px" data-i18n="Close">${browser.i18n.getMessage("close")}</button>
-				<button type="button" name="save" class="inputNice _hover" style="float:right;margin:10px 5px" data-i18n="Save">${browser.i18n.getMessage("save")}</button>`;
-				_form.className = 'editForm';
-				_form.action = "";
+				_form.node = node;
+								
+				_form.iconURL.value = node.icon || "";
+				_form.shortName.value = node.title;
 				
-				_form.closeForm = function() {
-					_form.style.maxHeight = null;
-					setTimeout(() => {
-						_form.parentNode.removeChild(_form);
-					}, 1000);
-				}
-				
-				_form.addEventListener('mouseover', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', false);
-				});
-				
-				_form.addEventListener('mouseout', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', true);
-				});
-				
-				_form.close.onclick = function() {
-					_form.closeForm();
-				}
+				_form.close.onclick = _form.closeForm;
 				
 				_form.save.onclick = function() {
-					if ( !_form.iconURL.value ) return;
-					img.src = browser.runtime.getURL("/icons/spinner.svg");
+
 					let newIcon = new Image();
 					newIcon.onload = function() {
-						img.src = imageToBase64(this, 32) || tempImgToBase64(node.title.charAt(0).toUpperCase());
-					//	saveForm();
-						node.icon = img.src;
+						node.icon = imageToBase64(this, userOptions.cacheIconsMaxSize);
+						onloadend();
 						updateNodeList();
-						li.dispatchEvent(new MouseEvent('dblclick'));
 					}
 					newIcon.onerror = function() {	
-					//	showError(edit_form.iconURL,browser.i18n.getMessage("IconLoadError"));
-						img.src = tempImgToBase64(node.title.charAt(0).toUpperCase());
-						node.icon = img.src;
+						node.icon = _form.iconURL.value;
+						onloadend();
 						updateNodeList();
-					//	saveForm(false);
 					}
+
+					let onloadend = function () {
+						 _form.querySelector('[name="faviconBox"] img').src = getIconFromNode(node);
+						 img.src = getIconFromNode(node);
+					}
+
+					node.title = _form.shortName.value.trim();
+
+					text.innerText = node.title;
+
+					showSaveMessage("saved", null, _form.querySelector(".saveMessage"));
 					
-					newIcon.src = _form.iconURL.value;
+					newIcon.src = getIconSourceFromURL(_form.iconURL.value);
 					
-					setTimeout(() => {
-						if (!newIcon.complete)
-							newIcon.onerror();
-					}, 5000);
+					setTimeout(() => { if (!newIcon.complete) newIcon.onerror()}, 5000);
 				}
-				li.appendChild(_form);
 				
-				_form.getBoundingClientRect();
-				_form.style.maxHeight = '100px';
+				createFormContainer(_form);
+				addIconPickerListener(_form.iconPicker, li);
+				_form.addFaviconBox(getIconFromNode(node));
 				
 			}
 		}
@@ -419,19 +421,19 @@ function buildSearchEngineContainer() {
 			div.style = 'display:inline-block;width:200px;height:4px;background-color:#aaa';
 			text.appendChild(div);
 			text.className = "label";
-			li.appendChild(text);
+			header.appendChild(text);
 		}
 		
 		if (node.type === 'oneClickSearchEngine') {
 
 			let img = document.createElement('img');
-			img.src = node.icon;
-			li.appendChild(img);
+			img.src = getIconFromNode(node);
+			header.appendChild(img);
 
 			let text = document.createElement('span');
 			text.innerText = node.title;
 			text.className = "label";
-			li.appendChild(text);
+			header.appendChild(text);
 			
 			// indicate as a firefox one-click
 			let ff = document.createElement('span');
@@ -439,113 +441,102 @@ function buildSearchEngineContainer() {
 			ff.style = 'background-color:rgb(234, 172, 92);color:white;border-radius:4px;font-size:7pt;font-weight:bold;margin-left:5px;padding:1px 5px;vertical-align:middle';
 			ff.title = 'Firefox One-Click Search Engine';
 
-			li.appendChild(ff);
+			header.appendChild(ff);
+			
+			li.addEventListener('dblclick', e => {
+				alert( browser.i18n.getMessage('CannotEditOneClickEngines'));
+			});
 		}
 		
 		if (node.type === 'folder') {
 			
 			let img = document.createElement('img');
-			img.src = browser.runtime.getURL('/icons/folder-icon.png');
-			li.appendChild(img);
+			img.src = getIconFromNode(node);
+			header.appendChild(img);
 			
 			let text = document.createElement('span');
 			text.innerText = node.title;
 			text.className = "label";
-			li.appendChild(text);
+			header.appendChild(text);
+			
+			let ec = document.createElement('span');
+			ec.innerText = "-";
+			ec.className = "collapse";
+
+			header.insertBefore(ec, header.firstChild);
 
 			let ul = document.createElement('ul');
 			li.appendChild(ul);
+
+			ec.expand = () => {
+				ul.style.display = null;
+				ec.innerText = "-";
+			}
+
+			ec.collapse = () => {
+				ul.style.display = 'none';
+				ec.innerText = "+";
+			}
+			
+			ec.onclick = function() {
+				if ( ul.style.display ) ec.expand();
+				else ec.collapse();
+			}
 			
 			node.children.forEach( _node => traverse(_node, ul) );
 			
-			li.addEventListener('dblclick', (e) => {
+			li.addEventListener('dblclick', e => {
 				
-				if ( e.target !== li && e.target !== img ) return;
+				if ( e.target !== li && e.target !== img && e.target !== header ) return;
 				
 				e.stopPropagation();
-				if ( li.querySelector(".editForm") ) {
-					let _form = li.querySelector(".editForm");
-					_form.closeForm();
-					return;
-				}
 				
-				let _form = document.createElement('form');
-				_form.innerHTML = `
-				<table id="folderFormTable">
-					<tr>
-						<td>Display</td>
-						<td>
-							<select name="displayType" class="inputNice" style="display:inline-block;font-size:9pt;">
-								<option value="">default</option>
-								<option value="grid">grid</option>
-								<option value="text">text</option>
-							</select>
-						</td>
-					</tr>
-					<tr>
-						<td>Group layout</td>
-						<td><input name="groupFolder" type="checkbox" style="display:inline-block;width:auto"/></td>
-					</tr>
-					<tr>
-						<td>Group color</td>
-						<td><input name="groupColor" type="color" style="width:30px;display:inline-block"/></td>
-					</tr>
-					<tr>
-						<td>Group limit</td>
-						<td><input name="groupLimit" type="number" min="0" max="99" style="width:60px;display:inline-block"/></td>
-					</tr>
-				</table>
+				let _form = $('#editFolderForm');
+				_form.node = node;
 				
-				<button type="button" name="close" class="inputNice _hover" style="float:right;margin:10px 5px" data-i18n="Close">${browser.i18n.getMessage("close")}</button>
-				<button type="button" name="save" class="inputNice _hover" style="float:right;margin:10px 5px" data-i18n="Save">${browser.i18n.getMessage("save")}</button>
-				<span class="saveMessage" style="float:right;margin: 10px 5px"></span>
-				`;
-				_form.className = 'editForm';
-				_form.action = "";
+				_form.closeForm = _form.closeForm;
 				
-				_form.closeForm = function() {
-					_form.style.maxHeight = null;
-					setTimeout(() => {
-						_form.parentNode.removeChild(_form);
-					}, 1000);
-				}
-				
-				_form.addEventListener('mouseover', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', false);
-				});
-				
-				_form.addEventListener('mouseout', () => {
-					for (let _li of rootElement.getElementsByTagName('li'))
-						_li.setAttribute('draggable', true);
-				});
-				
-				_form.close.onclick = function() {
-					_form.closeForm();
-				}
+				_form.close.onclick = _form.closeForm;
 				
 				_form.save.onclick = function() {
-					showSaveMessage("saved", null, "yes", _form.querySelector(".saveMessage"));
-					
+					showSaveMessage("saved", null, _form.querySelector(".saveMessage"));
+
+					node.title = _form.shortName.value.trim();
 					node.groupColor = _form.groupColor.value;
 					node.groupFolder = _form.groupFolder.checked;
 					node.groupLimit = parseInt(_form.groupLimit.value);
 					node.displayType = _form.displayType.value;
+					node.groupHideMoreTile = _form.groupHideMoreTile.checked;
+					node.icon = _form.iconURL.value;
 					updateNodeList();
+
+					text.innerText = node.title;
 				}
-				
-				li.insertBefore(_form, ul);
-				
+
+				_form.iconURL.addEventListener('change', () => {
+					let img = li.querySelector('.header IMG');
+					img.src = _form.iconURL.value || browser.runtime.getURL('icons/folder-icon.svg');
+				});
+								
+				_form.shortName.value = node.title;
 				_form.groupColor.value = node.groupColor || userOptions.defaultGroupColor;
 				_form.groupFolder.checked = node.groupFolder || false;
 				_form.groupLimit.value = node.groupLimit || 0;
 				_form.displayType.value = node.displayType || "";
+				_form.groupHideMoreTile.checked = node.groupHideMoreTile || false;
+				_form.iconURL.value = node.icon || "";
 				
-				_form.getBoundingClientRect();
-				_form.style.maxHeight = '200px';
+				createFormContainer(_form);
+				addIconPickerListener(_form.iconPicker, li);
+				_form.addFaviconBox(getIconFromNode(node));
+
+				_form.groupColorPicker.value = _form.groupColor.value;
+				_form.groupColorPicker.onchange = (e) => {
+					_form.groupColor.value = e.target.value;
+				}
 			});	
 			
-			text.addEventListener('dblclick', (e) => {
+			text.addEventListener('dblclick', e => {
 				
 				e.stopPropagation();
 
@@ -565,13 +556,13 @@ function buildSearchEngineContainer() {
 						_li.setAttribute('draggable', true);
 				});
 				
-				input.addEventListener('keypress', (ev) => {
-					if (ev.keyCode === 13)
+				input.addEventListener('keypress', ev => {
+					if (ev.key === "Enter")
 						saveTitleChange(ev);
 				});
 				
-				input.addEventListener('keydown', (e) => {
-					if (e.keyCode === 27) {
+				input.addEventListener('keydown', e => {
+					if (e.key === "Escape") {
 						text.removeChild(input);
 						text.innerText = node.title;
 					}
@@ -601,30 +592,31 @@ function buildSearchEngineContainer() {
 		}
 		
 		// add hotkeys for some node types
-		if ( ['searchEngine', 'oneClickSearchEngine', 'bookmarklet'].includes(node.type) ) {
+		if ( ['searchEngine', 'oneClickSearchEngine', 'bookmarklet', 'folder'].includes(node.type) ) {
 			
 			let hotkey = document.createElement('span');
 			hotkey.title = browser.i18n.getMessage('Hotkey');
 			hotkey.className = 'hotkey';
-			hotkey.style.right = "0px";
+			hotkey.style.right = "4px";
 
-			li.appendChild(hotkey);
+			header.appendChild(hotkey);
 			hotkey.innerText = keyTable[node.hotkey] || "";
 			
 			hotkey.onclick = function(e) {
 				e.stopPropagation();			
-				e.target.innerText = '';
+				e.target.innerText = null;
+
 				let img = document.createElement('img');
 				img.src = 'icons/spinner.svg';
-				img.style.height = '1em';
-				img.style.verticalAlign = 'middle';
+
 				e.target.appendChild(img);
+
 				window.addEventListener('keydown', function keyPressListener(evv) {
 					evv.preventDefault();
 					
 					if ( /* invalid keys */ [9,37,38,39,40].includes(evv.which) ) return;
 
-					if (evv.which === 27) {
+					if (evv.key === "Escape") {
 						node.hotkey = null;
 						
 						// set hotkey for all copies
@@ -640,11 +632,9 @@ function buildSearchEngineContainer() {
 					
 					node.hotkey = evv.which;
 
-					if ( findNodes(rootElement.node, _node => _node.hotkey === evv.which && _node.id !== node.id).length ) {						
+					if ( findNode(rootElement.node, _node => _node.hotkey === evv.which && _node.id !== node.id) ) {						
 						hotkey.style.backgroundColor = 'pink';
-						setTimeout( () => {
-							hotkey.style.backgroundColor = null;
-						},250);
+						setTimeout(() => hotkey.style.backgroundColor = null, 250);
 						return;
 					}
 
@@ -662,43 +652,98 @@ function buildSearchEngineContainer() {
 					window.removeEventListener('keydown', keyPressListener);
 					updateNodeList();
 				}); 
-				
 			}
-		}
-		
-		document.addEventListener('click', (e) => {
-			if ( e.target.classList.contains('label') ) return;
-			
-			table.querySelectorAll('.selected').forEach( _span => {
-				_span.classList.remove('selected');
+
+			let keyword = document.createElement('input');
+			keyword.title = browser.i18n.getMessage('Keyword');
+			keyword.className = "inputNice hotkey keyword";
+
+
+			header.appendChild(keyword);
+			keyword.value = node.keyword || "";
+
+			keyword.onclick = e => e.stopPropagation();
+			keyword.ondblclick = e => e.stopPropagation();
+			keyword.addEventListener('dragstart', (e) => {
+				e.preventDefault();
+				e.stopImmediatePropagation();
 			});
-			selectedRows = [];
+			keyword.addEventListener('mousedown', () => li.setAttribute("draggable", false));
+			keyword.addEventListener('mouseup', () => li.setAttribute("draggable", true));
+			keyword.setAttribute('draggable', false);
+
+			keyword.addEventListener('keydown', e => {
+				if ( e.key === "Enter") {
+					keyword.dispatchEvent(new Event('change'));
+					keyword.blur();
+				}
+			});
+
+			keyword.addEventListener('keydown', e => {
+				if ( e.key === "Escape") {
+					keyword.value = "";
+					keyword.dispatchEvent(new Event('change'));
+					keyword.blur();
+				}
+			});
+
+			keyword.addEventListener('change', e => {
+				keyword.value = keyword.value.trim();
+
+				// check for duplicates
+				if ( keyword.value && findNode(rootElement.node, _node => _node.keyword === keyword.value && _node.id !== node.id) ) {
+
+					keyword.style.backgroundColor = 'pink';
+					return;
+				}
+
+				node.keyword = keyword.value;
+
+				// set keyword for all copies
+				for (let _li of rootElement.querySelectorAll('li')) {
+					if (_li.node.id === node.id) {
+						_li.querySelector('.keyword').value = _li.node.keyword = node.keyword;
+						_li.querySelector('.keyword').style.backgroundColor = null;
+					}
+				}
+				
+				updateNodeList();
+			});
+
+			// let edit = new Image();
+			// edit.className = "editIcon";
+			// edit.src = 'icons/settings.svg';
+			// header.appendChild(edit);
+
+		}
+
+		document.addEventListener('click', e => {			
+			if ( document.getElementById('managerContainer').contains(e.target) ) return;			
+			clearSelectedRows();
 		});
-		
-		li.querySelector('.label').addEventListener('click', (e) => {
-//			console.log(node);
+
+		li.querySelector('.header').addEventListener('click', e => {
 			closeContextMenus();
-			e.stopPropagation();
+		//	e.stopPropagation();
 
 			if (!selectedRows.length) {
-				li.querySelector('SPAN:first-of-type').classList.add('selected');
+				li.querySelector('.header').classList.add('selected');
 				selectedRows.push(li);
 				return;
 			}
 			
-			if (selectedRows.length && !e.shiftKey) {
-				table.querySelectorAll('.selected').forEach( _span => {
-					_span.classList.remove('selected');
-				});
-				selectedRows = [];
-				
-				li.querySelector('SPAN:first-of-type').classList.add('selected');
+			if (selectedRows.length && !e.shiftKey && !e.ctrlKey) {
+				clearSelectedRows();
+
+				li.querySelector('.header').classList.add('selected');
 				selectedRows.push(li);
 				return;
 			}
 			
 			if (selectedRows.length && e.shiftKey) {
-				let startNode = selectedRows[0].node;
+			//	let startNode = selectedRows[0].node;
+				let startRow = selectedRows.slice(-1)[0]
+				let startNode = startRow.node
 				let endNode = li.node;
 				
 				if (startNode.parent !== endNode.parent) return;
@@ -709,20 +754,31 @@ function buildSearchEngineContainer() {
 				let slicedNodes = startNode.parent.children.slice(startIndex, endIndex + 1);
 				
 				let lis = [...table.querySelectorAll('li')];
-				let start = lis.indexOf(selectedRows[0]);
+			//	let start = lis.indexOf(selectedRows[0]);
+				let start = lis.indexOf(startRow);
 				let end = lis.indexOf(li);
 				
 				liStartIndex = Math.min(start, end);
 				liEndIndex = Math.max(start, end);
 				
 				for (let i=liStartIndex;i<liEndIndex + 1;i++) {
-					lis[i].querySelector('SPAN:first-of-type').classList.add('selected');
+					lis[i].querySelector('.header').classList.add('selected');
 					selectedRows.push(lis[i]);
 				}
 
-				// console.log(liStartIndex + ' - ' + liEndIndex);
+				selectedRows = [...new Set(selectedRows)];
+			} else if ( selectedRows.length && e.ctrlKey ) {	
+
+				if ( li.querySelector('.header').classList.contains('selected') ) {
+					let i = selectedRows.indexOf(li);
+					selectedRows.splice(i,1);
+					console.log('removing selected row', i, selectedRows);
+				} else {
+					selectedRows.push(li);
+					console.log('pushing selected row', selectedRows);
+				}
 				
-				// console.log(slicedNodes);
+				li.querySelector('.header').classList.toggle('selected');
 			}
 			
 		});
@@ -739,7 +795,7 @@ function buildSearchEngineContainer() {
 	setParents(root);
 
 	// clear any dead nodes
-	repairNodeTree(root).then((result) => {
+	repairNodeTree(root).then( result => {
 
 		rootElement.node = root;
 		
@@ -747,9 +803,7 @@ function buildSearchEngineContainer() {
 			traverse(child, rootElement);
 		
 		table.appendChild(rootElement);
-		
-		// console.log(root);
-		// console.log('repaired', result);
+
 		updateNodeList();
 		
 		document.getElementById('managerContainer').innerHTML = null;
@@ -774,17 +828,20 @@ function buildSearchEngineContainer() {
 		ev.dataTransfer.setData("text", "");
 		window.dragRow = nearestParent('LI', ev.target);
 		ev.effectAllowed = "copyMove";
-		selectedRows.unshift(dragRow);
-		window.dragRow.querySelector('SPAN:first-of-type').classList.add('selected');
-	//	selectedRows.push(dragRow);
+		
+		// if dragrow is not selected
+		if ( !selectedRows.includes(window.dragRow) ) {
+			clearSelectedRows();
+			window.dragRow.querySelector('.header').classList.add('selected');
+			selectedRows.push(window.dragRow);
+		}
 	}
 	
 	function dragover_handler(ev) {
 		let overNode = nearestParent('LI', ev.target);
-		
-		if (window.dragRow.contains(overNode) ) {
-			window.dragRow.style.backgroundColor = "pink";
-			window.dragRow.style.opacity = .5;
+
+		if ( selectedRows.includes(overNode) ) {
+			overNode.querySelectorAll('.header').forEach( row => row.classList.add('error') );
 			return;
 		}
 		
@@ -794,14 +851,13 @@ function buildSearchEngineContainer() {
 			position = 'middle';
 		
 		overNode.style = null;
-		overNode.querySelector('.label').style = null;
 
 		if ( position === 'top' ) {
 			overNode.style.borderTop = '2px solid #008afc';
 		} else if ( position === 'bottom' ) {
 			overNode.style.borderBottom = '2px solid #008afc';
 		} else {
-			overNode.querySelector('img').style.filter = 'hue-rotate(180deg)';
+			overNode.querySelector('.header').classList.add('selected');
 		}
 
 		ev.preventDefault();
@@ -810,12 +866,11 @@ function buildSearchEngineContainer() {
 		window.dragRow.style = null;
 		let overNode = nearestParent('LI', ev.target);
 		overNode.style=null;
+		overNode.querySelectorAll('.header').forEach( row => row.classList.remove('error') );
 		
 		// clear folder styling
-		try {
-		//	overNode.querySelector("ul").firstChild.style = null;
-			overNode.querySelector('img').style.filter = null;
-		} catch (error) {}
+		if ( overNode.node.type === "folder" && !selectedRows.includes(overNode) ) // only remove if not originally selected
+			overNode.querySelector('.header').classList.remove('selected');
 	}
 	function drop_handler(ev) {
 		
@@ -829,13 +884,6 @@ function buildSearchEngineContainer() {
 		// clear drag styling
 		targetElement.style = null;
 		window.dragRow.style = null;
-		window.dragRow.querySelector('.label').style = null;
-		
-		// clear folder styling
-		try {
-		//	targetElement.querySelector("ul").firstChild.style = null;
-			targetElement.querySelector('img').style.filter = null;
-		} catch (error) {}
 
 		// sort with hierarchy
 		let sortedRows = [ ...$('#managerContainer').querySelectorAll('LI')].filter( row => selectedRows.indexOf(row) !== -1 ).reverse();
@@ -845,32 +893,18 @@ function buildSearchEngineContainer() {
 			let _node = row.node;
 
 			// cut the node from the children array
-			let slicedNode = _node.parent.children.splice(_node.parent.children.indexOf(_node), 1).shift();
+			let slicedNode = nodeCut(_node);
 
 			// if target is bottom of populated folder, proceed as if drop on folder
 			if ( targetElement.node.type === 'folder' && targetElement.node.children.length && position === 'bottom' )
 				position = 'middle';
 			
 			if ( position === 'top' ) {
-				
-				// set new parent
-				slicedNode.parent = targetNode.parent;
-
-				// add to children above target
-				targetNode.parent.children.splice(targetNode.parent.children.indexOf(targetNode),0,slicedNode);
-
-				// insert into DOM
+				nodeInsertBefore(slicedNode, targetNode);
 				targetElement.parentNode.insertBefore(row, targetElement);
 				
 			} else if ( position === 'bottom' ) {
-
-				// set new parent
-				slicedNode.parent = targetNode.parent;
-
-				// add to children above target
-				targetNode.parent.children.splice(targetNode.parent.children.indexOf(targetNode) + 1, 0, slicedNode);
-
-				// insert into DOM
+				nodeInsertAfter(slicedNode, targetNode);
 				targetElement.parentNode.insertBefore(row, targetElement.nextSibling);
 					
 			} else if ( position === 'middle' ) { // drop into folder
@@ -900,17 +934,36 @@ function buildSearchEngineContainer() {
 		return target;
 	}
 	
-	function updateNodeList() {
-		userOptions.nodeTree = JSON.parse(JSON.stringify(rootElement.node));
-		saveOptions();
-	}
-	
-	function contextMenuHandler(e) {
+	function updateNodeList(forceSave) {
 		
-		if (document.getElementById('editSearchEngineContainer').contains(e.target) ) return false;
+		forceSave = forceSave || false;
+		
+		let currentNodeTree = JSON.parse(JSON.stringify(rootElement.node));
+		
+		if ( JSON.stringify(currentNodeTree) != JSON.stringify(userOptions.nodeTree) || forceSave) {
+			// console.log('nodeTrees unequal. Saving');
+			userOptions.nodeTree = currentNodeTree
+			saveOptions();
+		} else {
+			// console.log('node trees are the same - skipping save');
+		}
+	}
+
+	function contextMenuHandler(e) {
+
+		if (document.getElementById('editSearchEngineForm').contains(e.target) ) return false;
 		e.preventDefault();
 		
 		let li = nearestParent('LI', e.target);
+
+		// flag if opened from button vs context menu
+		let buttonAdd = e.target === document.querySelector('#b_addSearchEngine') ? true : false;
+		if ( buttonAdd && !li ) {
+			// if ( selectedRows && selectedRows.length === 1)
+			// 	li = selectedRows[0];
+			// else
+				li = document.querySelector('#managerContainer ul').lastChild;
+		}
 		
 		closeContextMenus();
 
@@ -931,30 +984,81 @@ function buildSearchEngineContainer() {
 			
 			menuItem.appendChild(span);
 			
+			
+			menuItem.addEventListener('click', e => {
+				if ( menuItem.disabled ) {
+					e.preventDefault();
+					e.stopImmediatePropagation();
+					return false;
+				}
+			});
+			
 			return menuItem;
 		}
 
 		let _delete = createMenuItem(browser.i18n.getMessage('Delete'), browser.runtime.getURL('icons/crossmark.svg'));
-
+		
 		_delete.onclick = function(e) {
 			closeSubMenus();
 			e.stopImmediatePropagation();
 			e.preventDefault();
-			
 
-			// move the edit form if open on node
-			let editForm = document.getElementById('editSearchEngineContainer');
-			if ( li.contains(editForm) ) {
-				editForm.style.maxHeight = '0px';
-				document.body.appendChild(editForm);	
+			// count the nodes to delete for prompt		
+			function incrementKey(obj, key) {
+				if ( !obj.hasOwnProperty(key) ) obj[key] = 1;
+				else obj[key]++;
 			}
-
-			let engines = findNodes(li.node, node => node.type === "searchEngine");
-			let engineCount = engines.length;
 			
-			if ( li.node.type === 'folder' && engineCount ) {
-				let _menu = document.createElement('div');
+			let nodesToDelete = [];	
+			selectedRows.forEach( row => {
+				nodesToDelete = nodesToDelete.concat(findNodes(row.node, n => true));
+			});
 
+			let objectsToDelete = {};	
+			[...new Set(nodesToDelete)].forEach(n => incrementKey(objectsToDelete, n.type)); 
+			
+			if ( !selectedRows.length ) selectedRows.push(li);
+			
+		//	if ( selectedRows.length > 1 || li.node.children ) {
+				
+				let msgDiv = document.createElement('div');
+				let msgDivHead = document.createElement('div');
+				msgDivHead.innerText = browser.i18n.getMessage('confirm');
+				msgDiv.appendChild(msgDivHead);
+			//	msgDiv.appendChild(document.createElement('hr'));
+				let msgDivRow = document.createElement('div');
+				msgDiv.appendChild(msgDivRow);
+				
+				let nodeIcons = {
+					searchEngine: "settings.svg",
+					oneClickSearchEngine: "new.svg",
+					bookmarklet: "code.svg",
+					folder: "folder.svg",
+					separator: "separator.svg"
+				}
+				
+				// build delete message from objectsToDelete
+				for ( let key in objectsToDelete) {
+					if ( objectsToDelete.hasOwnProperty(key) ) {
+						let d = document.createElement('div');
+						let img = new Image();
+						img.style = "display:inline-block;height:16px;width:16px;vertical-align:middle";
+						img.src = browser.runtime.getURL('icons/' + nodeIcons[key]);
+						
+						msgDivRow.appendChild(d);
+						d.innerText = objectsToDelete[key];
+						d.insertBefore(img, d.firstChild);
+						
+						// let x = new Image();
+						// x.style = img.style;
+						// x.src = browser.runtime.getURL('icons/crossmark.svg');
+						// x.style+= "filter: grayscale(100%) brightness(40%) sepia(100%) hue-rotate(-50deg) saturate(600%) contrast(0.8);";
+						
+						// d.insertBefore(x, d.firstChild);
+					}
+				}
+				
+				let _menu = document.createElement('div');
 				_menu.className = 'contextMenu subMenu';
 				
 				// position to the right of opening div
@@ -965,127 +1069,65 @@ function buildSearchEngineContainer() {
 				// add menu items
 				let item1 = document.createElement('div');
 				item1.className = 'menuItem';
-				item1.innerText = browser.i18n.getMessage('RemoveNode');
+				item1.appendChild(msgDiv);
 				
-				item1.addEventListener('click', (_e) => {
-					
-					// append orphaned search engines
-					engines.forEach( engine => {
-						if ( findNodes( root, _node => _node.id === engine.id ).length === 1 ) {
-							let orphanedNode = Object.assign({}, engine);
-							orphanedNode.hidden = true;
-							orphanedNode.parent = root;
-							root.children.push(orphanedNode);
-							traverse(orphanedNode, rootElement);
-						}
-					});
-
-					removeNode(li.node, li.node.parent);
-
-					li.parentNode.removeChild(li);
-					
-					updateNodeList();
-					closeContextMenus();
-				});
+				item1.addEventListener('click', removeNodesAndRows);
 				
-				let item2 = document.createElement('div');
-				item2.className = 'menuItem';
-				item2.innerText = browser.i18n.getMessage('DeleteEngines', engineCount);//"Delete " + engineCount + " engines";
-				
-				item2.addEventListener('click', (_e) => {
-					removeNode(li.node, li.node.parent);
-					li.parentNode.removeChild(li);
-					
-					engines.forEach( engine => {
-						// remove search engines
-						let index = userOptions.searchEngines.findIndex( se => se.id === engine.id);					
-						if (index !== -1) userOptions.searchEngines.splice(index, 1);
-						
-						// remove other nodes using engine
-						removeNodesById(rootElement.node, engine.id);
-						for (let _li of rootElement.querySelectorAll('li[data-nodeid="' + engine.id + '"]'))
-							_li.parentNode.removeChild(_li);
-					
-					});
-					
-					updateNodeList();
-					closeContextMenus();
-				});
-				
-				[item1, item2].forEach( el => { _menu.appendChild(el) });
-	
+				_menu.appendChild(item1);
 				document.body.appendChild(_menu);
 				openMenu(_menu);
 				
+		//	}
+			
+			async function removeNodesAndRows() {
 
-			} else if ( li.node.type === 'searchEngine' ) {
+				let edit_form = document.getElementById('editSearchEngineForm');
+				selectedRows.forEach( row => {
+					if ( row.contains(edit_form)) {
+						edit_form.style.maxHeight = null;
+						document.body.appendChild(edit_form);
+					}
+				})
+
+				// remember OCSEs to append hidden
+				let ffses = [];
+				selectedRows.forEach( row => {					
+					ffses = ffses.concat(findNodes( row.node, n => n.type === "oneClickSearchEngine"));
+				});
+
+				// remove nodes and rows
+				selectedRows.forEach( row => {
+					if ( row.node.parent ) removeNode(row.node, row.node.parent);
+					if ( row.parentNode ) row.parentNode.removeChild(row);
+				});
 				
-				let duplicateNodes = findNodes( root, _node => _node.id === li.node.id );
-				
-				// only one engine, delete
-				if ( duplicateNodes.length === 1 ) {
-					
-					let _menu = document.createElement('div');
+				// remove nodeless searchEngines
+				let indexesToRemove = [];
+				userOptions.searchEngines.forEach( (se,index) => {
+					if ( !findNode(rootElement.node, node => node.id === se.id) ) {
+						indexesToRemove.push(index);
+					}
+				});
 
-					_menu.className = 'contextMenu subMenu';
-					
-					// position to the right of opening div
-					let rect = _delete.getBoundingClientRect();
-					_menu.style.left = rect.x + window.scrollX + rect.width - 20 + "px";
-					_menu.style.top = rect.y + window.scrollY + "px";
-
-					// add menu items
-					let item1 = document.createElement('div');
-					item1.className = 'menuItem';
-					item1.innerText = browser.i18n.getMessage('Confirm');
-					
-					item1.addEventListener('click', (_e) => {
-						
-						let index = userOptions.searchEngines.findIndex( se => se.id === li.node.id);					
-						if (index !== -1) userOptions.searchEngines.splice(index, 1);
-						
-						removeNode(li.node, li.node.parent);
-						li.parentNode.removeChild(li);
-
-						updateNodeList();
-						closeContextMenus();
-					});
-					
-					[item1].forEach( el => { _menu.appendChild(el) });
-	
-					document.body.appendChild(_menu);
-					openMenu(_menu);
-					
-				} else {
-				
-					removeNode(li.node, li.node.parent);
-					li.parentNode.removeChild(li);
-					
-					updateNodeList();
-					closeContextMenus();
+				for ( let i=indexesToRemove.length -1; i>-1; i-- ) {
+					userOptions.searchEngines.splice(indexesToRemove[i], 1);
 				}
 
+				// append hidden OCSEs
+				ffses.forEach( n => {
+					n.parent = rootElement.node;
+					n.hidden = true;
+					rootElement.node.children.push(n);
+				});
 
-			} else {
-				removeNode(li.node, li.node.parent);
-				li.parentNode.removeChild(li);
-				
 				updateNodeList();
 				closeContextMenus();
 			}
 
 		}
-		
-		if ( li.node.type === 'oneClickSearchEngine') {
-			let copies = findNodes(rootElement.node, node => node.type === 'oneClickSearchEngine' && node.id === li.node.id && node !== li.node );
-
-			if ( copies.length === 0 ) {
-				_delete.style.display = 'none';
-			}
-		}
 
 		let edit = createMenuItem(browser.i18n.getMessage('Edit'), browser.runtime.getURL('icons/edit.png'));
-		edit.addEventListener('click', (e) => {
+		edit.addEventListener('click', e => {
 			e.stopPropagation();
 
 			if ( li.node.type === 'searchEngine')
@@ -1094,34 +1136,18 @@ function buildSearchEngineContainer() {
 				li.dispatchEvent(new MouseEvent('dblclick'));
 			if (li.node.type === 'bookmarklet')
 				li.dispatchEvent(new MouseEvent('dblclick'));
-			if (li.node.type === 'oneClickSearchEngine') {
-				// closeContextMenus();
-				
-				// e.preventDefault();
-				// e.stopImmediatePropagation();
-				
-				// let menu = document.createElement('div');
-				// menu.className = "contextMenu";
-				// menu.style.left = e.pageX + "px";
-				// menu.style.top = e.pageY + "px";	
-				// menu.style.padding = '10px';
-				// menu.innerText = browser.i18n.getMessage('CannotEditOneClickEngines') || "Firefox One-Click engines must be imported before making changes";
-				// document.body.appendChild(menu);
-
-				// openMenu(menu);
-				
-				// return false;
-			}
+			if (li.node.type === 'oneClickSearchEngine')
+				li.dispatchEvent(new MouseEvent('dblclick'));
 			
 			closeContextMenus();
 		});
 		
 		let hide = createMenuItem(li.node.hidden ? browser.i18n.getMessage('Show') : browser.i18n.getMessage('Hide'), browser.runtime.getURL('icons/hide.png'));
 		hide.addEventListener('click', () => {
-			if ( selectedRows === [] ) selectedRows.push(li);
+			if ( !selectedRows.length ) selectedRows.push(li);
 			
 			let hidden = !li.node.hidden;
-			
+
 			selectedRows.forEach( row => {
 				row.node.hidden = hidden;
 				
@@ -1133,32 +1159,36 @@ function buildSearchEngineContainer() {
 			closeContextMenus();
 		});
 		
-		let newFolder = createMenuItem(browser.i18n.getMessage('NewFolder'), browser.runtime.getURL('icons/folder4.png'));		
+		let newFolder = createMenuItem(browser.i18n.getMessage('NewFolder'), browser.runtime.getURL('icons/folder.svg'));		
 		newFolder.addEventListener('click', () => {
 			let newFolder = {
 				type: "folder",
 				parent: li.node.parent,
 				children: [],
 				title: browser.i18n.getMessage('NewFolder'),
+				id: gen(),
 				toJSON: li.node.toJSON
 			}
 			
-			li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, newFolder);
+			nodeInsertAfter(newFolder, li.node);
 			
 			let newLi = traverse(newFolder, li.parentNode);
-			li.parentNode.insertBefore(newLi, li);
+			li.parentNode.insertBefore(newLi, li.nextSibling);
 			
 			// required delay to work
 			setTimeout(() => {
-				newLi.dispatchEvent(new MouseEvent('dblclick'));
+			//	newLi.dispatchEvent(new MouseEvent('dblclick'));
+				newLi.querySelector('.header .label').dispatchEvent(new MouseEvent('dblclick'));
+				newLi.scrollIntoView({block: "start", behavior:"smooth"});
 			}, 100);
+
 			
 			updateNodeList();
 			closeContextMenus();
 		});
 		
 		let newBookmarklet = createMenuItem(browser.i18n.getMessage('AddBookmarklet'), browser.runtime.getURL('icons/code.svg'));		
-		newBookmarklet.addEventListener('click', (e) => {
+		newBookmarklet.addEventListener('click', e => {
 			closeSubMenus();
 			e.stopImmediatePropagation();
 			e.preventDefault();
@@ -1188,7 +1218,7 @@ function buildSearchEngineContainer() {
 			document.body.appendChild(bmContainer);
 			openMenu(bmContainer);
 
-			CSBookmarks.getAllBookmarklets().then((results) => {
+			CSBookmarks.getAllBookmarklets().then( results => {
 
 				if (results.length === 0) {
 					item1.innerHTML = "<i>none found</i>";
@@ -1205,7 +1235,7 @@ function buildSearchEngineContainer() {
 					bmDiv.className = 'menuItem';
 					bmDiv.innerText = bm.title;
 					
-					bmDiv.addEventListener('click', (e) => {
+					bmDiv.addEventListener('click', e => {
 						
 						let newBm = {
 							type: "bookmarklet",
@@ -1215,14 +1245,17 @@ function buildSearchEngineContainer() {
 							toJSON: li.node.toJSON
 						}
 						
-						li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, newBm);
-				
+						nodeInsertAfter(newBm, li.node);
+
 						let newLi = traverse(newBm, li.parentNode);
-						li.parentNode.insertBefore(newLi, li);
+						li.parentNode.insertBefore(newLi, li.nextSibling);
+						newLi.scrollIntoView({block: "start", behavior:"smooth"});
+						newLi.dispatchEvent(new MouseEvent('dblclick'));
 				
 						updateNodeList();
 						
 						closeContextMenus();
+
 
 					});
 					
@@ -1238,8 +1271,8 @@ function buildSearchEngineContainer() {
 
 		});
 		
-		let copy = createMenuItem(browser.i18n.getMessage('Copy'), browser.runtime.getURL('icons/clipboard.png'));	
-		copy.addEventListener('click', (e) => {
+		let copy = createMenuItem(browser.i18n.getMessage('Copy'), browser.runtime.getURL('icons/copy.svg'));	
+		copy.addEventListener('click', e => {
 			
 			let newNode;
 			if (li.node.type === 'searchEngine') {
@@ -1261,9 +1294,9 @@ function buildSearchEngineContainer() {
 				item1.className = 'menuItem';
 				item1.innerText = browser.i18n.getMessage('AsShortcut');
 				
-				item1.addEventListener('click', (_e) => {
+				item1.addEventListener('click', _e => {
 					let _newNode = Object.assign({}, li.node);
-					li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, _newNode);
+					nodeInsertBefore(_newNode, li.node);
 			
 					let newLi = traverse(_newNode, li.parentNode);
 					li.parentNode.insertBefore(newLi, li);
@@ -1275,15 +1308,10 @@ function buildSearchEngineContainer() {
 				item2.className = 'menuItem';
 				item2.innerText = browser.i18n.getMessage('AsNewEngine');
 				
-				item2.addEventListener('click', (_e) => {
+				item2.addEventListener('click', _e => {
 					let _newNode = addNewEngine(li.node, true);
-					
-					if ( _newNode ) {
-						li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, _newNode);
-				
-						let newLi = traverse(_newNode, li.parentNode);
-						li.parentNode.insertBefore(newLi, li);
-					}
+					addNode(_newNode, li);
+					updateNodeList(true);
 					
 					closeContextMenus();
 				});
@@ -1302,37 +1330,29 @@ function buildSearchEngineContainer() {
 			
 			if (!newNode) return;
 			
-			li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, newNode);
+			nodeInsertAfter(newNode, li.node);
 			
 			let newLi = traverse(newNode, li.parentNode);
-			li.parentNode.insertBefore(newLi, li);
+			li.parentNode.insertBefore(newLi, li.nextSibling);
 			
 			updateNodeList();
 			closeContextMenus();
 		});
 		
-		let newEngine = createMenuItem(browser.i18n.getMessage('NewEngine'), browser.runtime.getURL('icons/new.png'));	
+		let newEngine = createMenuItem(browser.i18n.getMessage('NewEngine'), browser.runtime.getURL('icons/new.svg'));	
 		newEngine.addEventListener('click', () => {
 			
-			let newNode = addNewEngine(li.node, false);
-			
-			if (newNode) {
-			
-				li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, newNode);
+			let newNode = addNewEngine(li.node, false);		
+			let newLi = addNode(newNode, li);
+			updateNodeList(true);
 				
-				let newLi = traverse(newNode, li.parentNode);
-
-				li.parentNode.insertBefore(newLi, li);
-				
-				updateNodeList();
-				
-				newLi.dispatchEvent(new MouseEvent('dblclick'));
-			}
+			newLi.scrollIntoView({block: "start", behavior:"smooth"});
+			newLi.dispatchEvent(new MouseEvent('dblclick'));
 			
 			closeContextMenus();
 		});
 		
-		let newSeparator = createMenuItem(browser.i18n.getMessage('NewSeparator'), browser.runtime.getURL('icons/separator.png'));	
+		let newSeparator = createMenuItem(browser.i18n.getMessage('NewSeparator'), browser.runtime.getURL('icons/separator.svg'));	
 		newSeparator.addEventListener('click', () => {
 			let newNode = {
 				type: "separator",
@@ -1340,21 +1360,32 @@ function buildSearchEngineContainer() {
 				toJSON: li.node.toJSON
 			}
 			
-			li.node.parent.children.splice(li.node.parent.children.indexOf(li.node), 0, newNode);
+			insertAfter(newNode, li.node);
 			
 			let newLi = traverse(newNode, li.parentNode);
-			li.parentNode.insertBefore(newLi, li);
+			li.parentNode.insertBefore(newLi, li.nextSibling);
+			newLi.scrollIntoView({block: "start", behavior:"smooth"});
 			
 			updateNodeList();
 		});
 
-		[edit, hide, newFolder, newEngine, newSeparator, newBookmarklet, copy, _delete].forEach((el) => {
+		// attach options to menu
+		[edit, hide, newFolder, newEngine, newSeparator, newBookmarklet, copy, _delete].forEach( el => {
 			el.className = 'menuItem';
 			menu.appendChild(el);
-			el.addEventListener('click', (e) => {
-				closeContextMenus();
-			});
+			el.addEventListener('click', closeContextMenus);
 		});
+		
+		// disable some menu items when multiple rows are selected
+		if ( selectedRows.length > 1 ) {
+			[edit, newFolder, newEngine, newSeparator, newBookmarklet, copy].forEach( el => {
+				el.disabled = true;
+				el.style.opacity = .5;
+			});
+		}
+
+		// remove some options when using button
+		if ( buttonAdd ) [edit, hide, copy, _delete].forEach( el => el.parentNode.removeChild(el));
 
 		menu.style.left = e.pageX + "px";
 		menu.style.top = e.pageY + "px";
@@ -1405,6 +1436,25 @@ function buildSearchEngineContainer() {
 		}
 	}
 	
+	function clearSelectedRows() {
+		table.querySelectorAll('.selected').forEach( row => row.classList.remove('selected') );
+		selectedRows = [];
+	}
+
+	function addNode(node, li) {
+		if ( !node || !li ) {
+			console.log("node or parent does not exist");
+			return false;
+		}
+
+		nodeInsertAfter(node, li.node);
+
+		let newLi = traverse(node, li.parentNode);
+		li.parentNode.insertBefore(newLi, li.nextSibling);
+
+		return newLi;
+	}
+	
 	function addNewEngine(node, copy) {
 		
 		copy = copy || false;
@@ -1440,7 +1490,6 @@ function buildSearchEngineContainer() {
 		} else {
 			se = {
 				"searchForm": "", 
-				"query_string":"",
 				"icon_url":"",
 				"title":shortName,
 				"order":userOptions.searchEngines.length, 
@@ -1466,101 +1515,210 @@ function buildSearchEngineContainer() {
 		}
 	}
 	
-	document.getElementById('b_addSearchEngine').addEventListener('click', (e) => {
-		let newNode = addNewEngine(rootElement.node.children.slice(-1)[0]);
-		if (newNode) {
-			
-			rootElement.node.children.push(newNode);
-			
-			let newLi = traverse(newNode, rootElement);
-
-			updateNodeList();
-			
-			newLi.scrollIntoView();
-			newLi.dispatchEvent(new MouseEvent('dblclick'));
-		}
+	document.getElementById('b_addSearchEngine').addEventListener('click', e => {
+		e.stopPropagation();
+		contextMenuHandler(e);
 	});
 	
-	document.getElementById('b_resetAllSearchEngines').addEventListener('click', (e) => {
+	document.getElementById('b_resetAllSearchEngines').addEventListener('click', async() => {
 		
 		if ( !confirm(browser.i18n.getMessage("ConfirmResetAllSearchEngines")) ) return;
 		
-		browser.runtime.getBackgroundPage().then( w => {
-			userOptions.nodeTree.children = [];	
-			
-			// reset searchEngines to defaults
-			userOptions.searchEngines = w.defaultEngines;
-			
-			// build nodes with default engines
-			repairNodeTree(userOptions.nodeTree);
-			
-			// unhide all default engines
-			findNodes( userOptions.nodeTree, node => node.hidden = false );
+		let w = await browser.runtime.getBackgroundPage();
+		userOptions.nodeTree.children = [];	
+		
+		// reset searchEngines to defaults
+		userOptions.searchEngines = w.defaultEngines;
+		
+		// build nodes with default engines
+		repairNodeTree(userOptions.nodeTree);
+		
+		// unhide all default engines
+		findNodes( userOptions.nodeTree, node => node.hidden = false );
 
-			// updated the background page UO
-			w.userOptions = userOptions;
+		// updated the background page UO
+		w.userOptions = userOptions;
+		
+		// add OCSE to the nodeTree
+		await w.checkForOneClickEngines();
 			
-			// add OCSE to the nodeTree
-			w.checkForOneClickEngines().then( () => {
-				
-				// updated the local UO
-				userOptions = w.userOptions;
-				saveOptions().then( () => {
-					location.href = "options.html?tab=enginesTab";
-				});
-			});
-		});
+		// updated the local UO
+		userOptions = w.userOptions;
+		await saveOptions();
+		location.href = "options.html#engines";
 	});
-	
-	function showSaveMessage(str, color, _class, el) {
 
-		color = color || "inherit";
+	function addIconPickerListener(el, li) {
+		el.addEventListener('change', e => {
+			let file = e.target.files[0];
+			
+			var reader  = new FileReader();
+			
+			reader.addEventListener("load", function () {
+				
+				let img = new Image();
+				
+				img.onload = function() {
+					let form = el.closest('form');;
+					form.iconURL.value = imageToBase64(img, userOptions.cacheIconsMaxSize);
+					li.querySelector("img").src = form.iconURL.value;
 
-		// clear and set save message
-		el.innerHTML = null;	
-		let msgSpan = document.createElement('span');
+					form.querySelector('[name="faviconBox"] img').src = form.iconURL.value;
+					form.save.click();
+				}
+				img.src = reader.result;
+				
+			}, false);
+			
+			reader.readAsDataURL(file);
+			
+		});
+	}
 
-		let img = document.createElement('div');
-		img.className = _class;
-		//img.style.height = img.style.width = '1em';
-		img.style.marginRight = '10px';
-		msgSpan.style = 'opacity:1;transition:opacity 1s .75s';
-		msgSpan.style.color = color;
-		//msgSpan.innerText = str;
+	let main_ec = $('#collapseAll');
+	main_ec.onclick = function() {
+		if ( main_ec.expand ) {
+			table.querySelectorAll('UL .collapse').forEach(c => c.expand());
+			main_ec.expand = false;
+		} else {
+			table.querySelectorAll('UL .collapse').forEach(c => c.collapse());
+			main_ec.expand = true;
+		}
+	}
+}
+
+['editSearchEngineForm', 'editFolderForm', 'editBookmarkletForm'].forEach( id => {
+
+	let form = $('#' + id);
+
+	form.addEventListener('input', e => form.save.classList.add('changed'));
+
+	form.closeForm = () => {
 		
-		msgSpan.insertBefore(img, msgSpan.firstChild);
+		let formContainer = $('#floatingEditFormContainer');
+
+		if ( !formContainer ) return;
 		
-		el.appendChild(msgSpan);
-		
-		msgSpan.addEventListener('transitionend', (e) => {
-			msgSpan.parentNode.removeChild(msgSpan);
+		formContainer.parentNode.style.opacity = 0;
+		$('#main').classList.remove('blur');
+		runAtTransitionEnd(formContainer, "opacity", () => {
+			form.style.display = null;
+			document.body.appendChild(form);
+			// formContainer.parentNode.removeChild(formContainer);
+			document.body.removeChild(formContainer.parentNode);
+		});
+	}
+
+	form.addFaviconBox = (url) => {
+		let box = form.querySelector('[name="faviconBox"]');
+		box.innerHTML = null;
+		let img = new Image();
+		img.src = url;
+		box.appendChild(img);
+		box.classList.add('inputNice');
+		box.classList.add('upload');
+
+		let forlabel = document.createElement('label');
+		forlabel.setAttribute('for', form.iconPicker.id);
+		forlabel.style = 'cursor:pointer;width:100%;height:100%;z-index:3;position:absolute;left:0;top:0';
+		forlabel.title = browser.i18n.getMessage('uploadfromlocal');
+		box.insertBefore(forlabel, box.firstChild);
+
+		img.onload = () => {
+			let label = document.createElement('div');
+			label.innerText = img.naturalHeight + " x " + img.naturalWidth;
+			box.appendChild(label);
+		}
+	}
+
+	// update the favicon when the user changes the url
+	form.iconURL.addEventListener('change', e => {
+
+		let defaultIcon = getIconFromNode({type:form.node.type});
+
+		let img = form.querySelector('[name="faviconBox"] img');
+		img.src = form.iconURL.value || defaultIcon;
+	})
+
+	form.save.addEventListener('click', e => form.save.classList.remove('changed'));
+});
+
+function createFormContainer(form) {
+
+	let overdiv = document.createElement('div');
+	overdiv.className = 'overDiv';
+	overdiv.style.opacity = 0;
+	document.body.appendChild(overdiv);
+
+	overdiv.onclick = function(e) {
+		if ( overdiv !== e.target) return;
+		form.close.click();
+	};
+
+	let formContainer = document.createElement('div');
+	formContainer.id = "floatingEditFormContainer";
+
+	overdiv.appendChild(formContainer);
+	formContainer.appendChild(form);
+
+	form.style.display = "block";
+	$('#main').classList.add('blur');
+
+	overdiv.getBoundingClientRect();
+	overdiv.style.opacity = null;
+
+	form.save.classList.remove('changed');
+}
+
+function getIconSourceFromURL(_url) {
+	if ( /^generate:/.test(_url) ) {
+		try {
+			let url = new URL(_url.replace(/#/g, "%23"));
+
+			// https://stackoverflow.com/a/8649003
+			let obj = JSON.parse('{"' + url.searchParams.toString().replace(/&/g, '","').replace(/=/g,'":"') + '"}', function(key, value) { return key===""?value:decodeURIComponent(value) });
+
+			return createCustomIcon(obj);
+		} catch (err) {
+			return _url;
+		}
+	} else {
+		return _url;
+	}
+}
+
+document.addEventListener('keydown', e => {
+	if ( e.key === 'f' && e.ctrlKey ) {
+		e.preventDefault();
+		$('#searchEnginesManagerSearch').focus();
+		$('#searchEnginesManagerSearch').scrollIntoView();
+	}
+});
+
+$('#searchEnginesManagerSearch').addEventListener('keyup', e => {
+
+	let labels = document.querySelectorAll('.label');
+
+	if ( e.key === "Escape" ) {
+		labels.forEach( label => {
+			let li = label.closest('li');
+			li.style.display = null;
+			label.parentNode.style.display = null;
 		});
 
-		msgSpan.getBoundingClientRect(); // reflow
-		msgSpan.style.opacity = 0;
+		e.target.value = null;
+
+		return;
 	}
-	
-	document.getElementById('iconPicker').addEventListener('change', (e) => {
-		let file = e.target.files[0];
-		
-		var reader  = new FileReader();
-		
-		reader.addEventListener("load", function () {
-			
-			let img = new Image();
-			
-			img.onload = function() {
-				let form = document.getElementById("editSearchEngineContainer");
-				form.iconURL.value = imageToBase64(img, 32);
-			//	document.getElementById('iconPreview').src = form.iconURL.value;
-				form.closest("LI").querySelector("img").src = form.iconURL.value;
-			}
-			img.src = reader.result;
-			
-		}, false);
-		
-		reader.readAsDataURL(file);
-		
-	});	
-	
-}
+
+	for ( let label of labels ) {
+		let li = label.closest('li');
+		li.style.display = null;
+		label.parentNode.style.display = null;
+		if ( !e.target.value ) continue;
+		if ( !label.innerText.toLowerCase().includes(e.target.value.toLowerCase())) {
+			if ( li.node.type === "folder" ) label.parentNode.style.display = 'none';
+			else li.style.display = 'none';
+		}
+	}
+})

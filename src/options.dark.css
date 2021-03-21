@@ -1,0 +1,25 @@
+:root {
+	--bg-color1:#3a3a3a;
+	--bg-color2:#353535;
+	--bg-color3:#454545;
+	--bg-color4:#454545;
+	--color:#888;
+	--color2:#888;
+	--border-color1:#333;
+	--border-color2:#222;
+	--border-color3:#333;
+	--hover1:#666;
+	--hover2:#3d3d3d;
+	--selected:#537a58;
+
+	--tree-row-border: 1px solid #444;
+
+	--tools-color: #888;
+}
+
+a, a:link, a:visited, a:active {
+	color: var(--selected);
+}
+#advancedSettingsTable TR:hover {
+	background-color:#444;
+}

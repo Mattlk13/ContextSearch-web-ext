@@ -1,22 +1,16 @@
 BODY, HTML {
 	margin:0;
 	padding:0;
+	background:var(--background);
+	text-align: left;
 }
 
-BODY[data-theme="dark"] {
-	color: #a4a4a4;
-}
-
-BODY[data-theme="dark"] IMG {
-	filter: invert(1) brightness(75%);
-}
 #findbar {
 	padding-top:5px;
 	font-size:10pt;
 	font-family:Arial;
 	font-weight:600;
 	user-select:none;
-	-moz-user-select:none;
 	height:36px;
 }
 #findbar > * {
@@ -26,22 +20,23 @@ BODY[data-theme="dark"] IMG {
 	width: 275px;
 	border:1px solid #888;
 	height:24px;
-	padding:0 24px 0 10px;
+	padding:0 24px 0 24px;
 	margin-left:4px;
 	user-select:text;
-	-moz-user-select:text;
 	border-radius:2px 0 0 2px;
 	vertical-align:middle;
 }
 #close {
 	vertical-align:middle;
 	width:20px;
-	/* padding:6px 0; /* center image */
+	height:20px;
 }
 .button {
 	border:1px solid #888;
 	text-align:center;
 	height:24px;
+	width:32px;
+	display:inline-block;
 	vertical-align:top;
 	padding:0 6px;
 }
@@ -49,24 +44,13 @@ BODY[data-theme="dark"] IMG {
 	vertical-align:middle;
 	margin-left:-1px;
 }
-#previous IMG, #next IMG {
-	width:20px;
-	vertical-align:middle;
-	position:relative;
-	top:2px;
-}
 #next {
-	transform:scaleY(-1);
 	border-radius:0 2px 2px 0;
 }
 #mark_counter {
 	margin:0 16px;
 }
-BODY[data-theme="dark"] .button {
-	background-color:#5b5b5d;
-}
 .optionLabel {
-	display:inline-block;
 	text-align:center;
 	height:22px;
 	width:22px;
@@ -79,7 +63,7 @@ BODY[data-theme="dark"] .button {
 }
 INPUT:checked + .optionLabel {
 	border:2px solid #888;
-	background-color:var(--hover);
+	background:var(--hover);
 }
 .option {
 	position:absolute;
@@ -87,12 +71,25 @@ INPUT:checked + .optionLabel {
 	display:none;
 	opacity:0;
 }
-#clearSearchBar {
-	position:relative;
+#searchIcon, #clearSearchBarButton {
+	position:absolute;
 	z-index:2;
-	margin-left:-22px;
-	margin-right:6px;
+	left:60px;
+	top:12px;
 	height:14px;
+	width:14px;
 	vertical-align:middle;
-	opacity:.3;
+	opacity:.5;
+}
+#searchIcon {
+	left:60px;
+	display:none;
+}
+#clearSearchBarButton {
+	left:360px;
+	opacity:.5;
+}
+LABEL .tool {
+	width:20px;
+	height:20px;
 }
